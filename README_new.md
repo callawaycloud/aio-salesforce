@@ -96,6 +96,21 @@ for result in results:
     print(f"Exported {result['records_exported']} {result['sobject']} records")
 ```
 
+## Configuration Options
+
+| Option | CLI Flag | Environment Variable | Description |
+|--------|----------|---------------------|-------------|
+| Username | `--username` | `SF_USERNAME` | Salesforce username |
+| Password | `--password` | `SF_PASSWORD` | Salesforce password |
+| Security Token | `--security-token` | `SF_SECURITY_TOKEN` | Salesforce security token |
+| Domain | `--domain` | `SF_DOMAIN` | Salesforce domain (login/test) |
+| S3 Bucket | `--s3-bucket` | `S3_BUCKET` | Target S3 bucket name |
+| S3 Prefix | `--s3-prefix` | `S3_PREFIX` | S3 object prefix |
+| AWS Region | `--aws-region` | `AWS_REGION` | AWS region |
+| SObjects | `--sobjects` | - | SObject types to export |
+| Batch Size | `--batch-size` | - | Records per batch |
+| Compression | `--compression` | - | Parquet compression (snappy/gzip/brotli/lz4) |
+
 ## Development
 
 This project uses modern Python tooling:
@@ -148,6 +163,13 @@ uv run mypy src/salesforce_to_s3
 
 # Run all quality checks
 uv run pre-commit run --all-files
+```
+
+### Building
+
+```bash
+# Build distribution packages
+uv build
 ```
 
 ## License

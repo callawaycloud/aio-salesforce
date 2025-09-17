@@ -1,0 +1,12 @@
+{
+    "username": "your-sf-username@company.com",
+    "password": "your-sf-password",
+    "security_token": "your-sf-security-token",
+    "domain": "login",
+    "s3_bucket": "your-s3-bucket-name",
+    "s3_prefix": "salesforce-exports",
+    "aws_region": "us-east-1",
+    "sobjects": ["Account", "Contact", "Opportunity"],
+    "batch_size": 10000,
+    "compression": "snappy"
+}
