@@ -1,0 +1,51 @@
+name: Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: "latest"
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      run: uv python install ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: uv sync --all-extras --dev
+    
+    - name: Test core installation (no exporter)
+      run: |
+        uv run --isolated python -c "
+        from aio_salesforce import SalesforceConnection, ClientCredentialsAuth
+        print('✅ Core installation works')
+        "
+    
+    - name: Test full installation (with exporter)
+      run: |
+        uv run python -c "
+        from aio_salesforce import SalesforceConnection
+        from aio_salesforce.exporter import bulk_query, ParquetWriter
+        print('✅ Full installation works')
+        "
+    
+    - name: Build package
+      run: uv build
+    
+    - name: Test wheel installation
+      run: |
+        uv run --isolated pip install dist/*.whl
+        uv run --isolated python -c "import aio_salesforce; print('✅ Wheel installation works')"
