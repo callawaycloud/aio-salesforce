@@ -1,4 +1,4 @@
-# aio-salesforce
+# aio-sf
 
 An async Salesforce library for Python with Bulk API 2.0 support.
 
@@ -27,14 +27,14 @@ An async Salesforce library for Python with Bulk API 2.0 support.
 
 ### Core (Connection Only)
 ```bash
-uv add aio-salesforce
-# or: pip install aio-salesforce
+uv add aio-sf
+# or: pip install aio-sf
 ```
 
 ### With Export Capabilities
 ```bash
-uv add "aio-salesforce[exporter]"
-# or: pip install "aio-salesforce[exporter]"
+uv add "aio-sf[exporter]"
+# or: pip install "aio-sf[exporter]"
 ```
 
 ## Quick Start

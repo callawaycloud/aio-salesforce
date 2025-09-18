@@ -5,7 +5,7 @@
 ### Configure Trusted Publishing (Recommended - No API tokens needed!)
 
 1. **For PyPI**: Go to https://pypi.org/manage/account/publishing/
-   - Project name: `aio-salesforce`
+   - Project name: `aio-sf`
    - Owner: `your-github-username`
    - Repository name: `salesforce-to-s3` (or your repo name)
    - Workflow filename: `publish.yml`

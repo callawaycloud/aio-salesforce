@@ -1,0 +1,26 @@
+---
+alwaysApply: true
+---
+
+# aio-salesforce Project Structure
+
+This is an async Salesforce library for Python with Bulk API 2.0 support.
+
+## Core Structure
+- **Main package**: [src/aio_salesforce/__init__.py](mdc:src/aio_salesforce/__init__.py) - Main package exports and version info
+- **Connection handling**: [src/aio_salesforce/connection.py](mdc:src/aio_salesforce/connection.py) - Authentication and connection management
+- **API modules**: [src/aio_salesforce/api/](mdc:src/aio_salesforce/api/) - Salesforce API clients (bulk_v2, metadata, query)
+- **Export functionality**: [src/aio_salesforce/exporter/](mdc:src/aio_salesforce/exporter/) - Data export utilities
+
+## Key Modules
+- **Bulk Export**: [src/aio_salesforce/exporter/bulk_export.py](mdc:src/aio_salesforce/exporter/bulk_export.py) - Bulk API 2.0 query functionality
+- **Parquet Writer**: [src/aio_salesforce/exporter/parquet_writer.py](mdc:src/aio_salesforce/exporter/parquet_writer.py) - Parquet file export with schema mapping
+- **Configuration**: [pyproject.toml](mdc:pyproject.toml) - Package configuration and dependencies
+- **Documentation**: [README.md](mdc:README.md) - Usage examples and API reference
+
+## Package Name
+- **PyPI name**: `aio-salesforce` (with hyphen)
+- **Import name**: `aio_salesforce` (with underscore)
+
+## Testing
+- **Test file**: [test.py](mdc:test.py) - Example usage and testing

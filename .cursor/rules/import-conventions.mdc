@@ -1,0 +1,38 @@
+---
+globs: *.py
+description: "Import conventions and module organization"
+---
+
+# Import Conventions
+
+## Main Package Imports
+```python
+# Core connection functionality
+from aio_salesforce import SalesforceConnection, ClientCredentialsAuth
+
+# Bulk query and export
+from aio_salesforce import bulk_query, ParquetWriter
+
+# Direct exporter imports
+from aio_salesforce.exporter import (
+    bulk_query, 
+    get_bulk_fields,
+    create_schema_from_metadata,
+    write_query_to_parquet_async
+)
+```
+
+## Internal Module Imports
+- Use relative imports within the package: `from ..api.types import FieldInfo`
+- Import from parent modules: `from ..connection import SalesforceConnection`
+- Keep imports organized: connection, then API, then utilities
+
+## Export Patterns
+- All public functions must be listed in `__all__`
+- Use `# noqa: F401` for re-exported imports
+- Maintain consistent export structure across modules
+
+## API Module Structure
+- `bulk_v2/` - Bulk API 2.0 client and types
+- `metadata/` - Metadata API client and types  
+- `query/` - SOQL query client and types

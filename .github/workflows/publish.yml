@@ -33,7 +33,7 @@ jobs:
 
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/aio-salesforce
+      url: https://test.pypi.org/p/aio-sf
 
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/aio-salesforce
+      url: https://pypi.org/p/aio-sf
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
 
