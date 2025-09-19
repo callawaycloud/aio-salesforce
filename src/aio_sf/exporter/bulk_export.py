@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, List, Generator, Optional
 import csv
 import asyncio
+import io
 
 from ..api.describe.types import FieldInfo
 from ..api.client import SalesforceClient
@@ -111,36 +112,49 @@ class QueryResult:
         """
         Stream CSV response and convert to record dictionaries.
 
+        Uses proper CSV parsing to handle quotes, newlines, and special characters correctly.
+
         :param response_text: CSV response text
         :yields: Individual record dictionaries
         """
-        lines = response_text.splitlines()
-
-        # Get the header row first
-        if not lines:
+        if not response_text or not response_text.strip():
             # No data in this batch
             return
 
         try:
-            header_line = lines[0]
-            fieldnames = next(csv.reader([header_line]))
-        except (IndexError, StopIteration, csv.Error):
-            # No data in this batch
-            return
+            # Create a StringIO object for proper CSV parsing
+            csv_buffer = io.StringIO(response_text)
 
-        # Process each data row
-        for line in lines[1:]:
-            if line.strip():  # Skip empty lines
+            # Use DictReader for proper CSV parsing with header detection
+            # This handles quotes, newlines in fields, and escaping correctly
+            csv_reader = csv.DictReader(
+                csv_buffer,
+                delimiter=",",
+                quotechar='"',
+                quoting=csv.QUOTE_MINIMAL,
+                skipinitialspace=True,
+            )
+
+            for row_num, record in enumerate(csv_reader, start=1):
                 try:
-                    # Parse the CSV row
-                    row_values = next(csv.reader([line]))
-                    # Convert to dictionary
-                    row = dict(zip(fieldnames, row_values))
-                    yield row
-                except (csv.Error, StopIteration):
-                    logging.warning(f"Error parsing line: {line}")
-                    # Skip malformed lines
+                    # Convert None values to empty strings for consistency
+                    cleaned_record = {
+                        key: (value if value is not None else "")
+                        for key, value in record.items()
+                    }
+                    yield cleaned_record
+                except Exception as e:
+                    logging.warning(f"Error processing CSV record {row_num}: {e}")
+                    # Continue processing other records
                     continue
+
+        except csv.Error as e:
+            logging.error(f"CSV parsing error: {e}")
+            # If CSV parsing fails completely, don't yield any records
+            return
+        except Exception as e:
+            logging.error(f"Unexpected error parsing CSV response: {e}")
+            return
 
     async def _generate_records(self):
         """Async generator that yields individual records."""
@@ -170,7 +184,9 @@ class QueryResult:
 
         except Exception as e:
             raise Exception(
-                f"Error processing record {ctn}: {e}. Current Query Locator: {locator}"
+                f"Error processing record {ctn}: {e}. Current Query Locator: {locator}. "
+                f"This may indicate a CSV parsing issue - check if the response contains "
+                f"malformed CSV data or fields with special characters."
             )
 
 
@@ -296,19 +312,9 @@ def resume_from_locator(
 
 
 # Helper function to get all fields that can be queried by bulk API
-async def get_bulk_fields(
-    sf: SalesforceClient, object_type: str, api_version: Optional[str] = None
-) -> List[FieldInfo]:
-    """Get field metadata for queryable fields in a Salesforce object.
-
-    :param sf: Salesforce client instance
-    :param object_type: Name of the Salesforce object (e.g., 'Account', 'Contact')
-    :param api_version: API version to use (defaults to client version)
-    :returns: List of field metadata dictionaries for queryable fields
-    """
+async def get_bulk_fields(fields_metadata: List[FieldInfo]) -> List[FieldInfo]:
+    """Get field metadata for queryable fields in a Salesforce object."""
     # Use the metadata API to get object description
-    describe_data = await sf.describe.sobject(object_type, api_version)
-    fields_metadata = describe_data["fields"]
 
     # Create a set of all compound field names to exclude
     compound_field_names = {

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "aio-sf"
 dynamic = ["version"]
-description = "Async Salesforce library for Python with Bulk API 2.0 support"
+description = "Async Salesforce library for Python"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [

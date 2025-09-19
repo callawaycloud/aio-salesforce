@@ -192,12 +192,17 @@ class ParquetWriter:
 
             # Apply type-specific conversions
             if pa.types.is_boolean(field.type):
-                # Convert string 'true'/'false' to boolean
-                df[field_name] = (
-                    df[field_name]
-                    .map({"true": True, "false": False, None: None})
-                    .fillna(df[field_name])
-                )  # Keep original values for non-string booleans
+                # Convert string 'true'/'false' to boolean, keeping original values for others
+                original_series = df[field_name]
+                mapped_series = original_series.map(
+                    {"true": True, "false": False, None: None}
+                )
+                # For values that weren't mapped, keep the original values
+                # This avoids the fillna FutureWarning by using boolean indexing instead
+                mask = mapped_series.notna()
+                result_series = original_series.copy()
+                result_series.loc[mask] = mapped_series.loc[mask]
+                df[field_name] = result_series
             elif pa.types.is_integer(field.type):
                 df[field_name] = pd.to_numeric(df[field_name], errors="coerce").astype(
                     "Int64"
