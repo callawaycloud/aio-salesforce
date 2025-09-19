@@ -14,7 +14,7 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from ...connection import SalesforceConnection
+    from ..client import SalesforceClient
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +22,12 @@ logger = logging.getLogger(__name__)
 class BulkV2API:
     """Salesforce Bulk API v2 methods."""
 
-    def __init__(self, connection: "SalesforceConnection"):
-        self.connection = connection
+    def __init__(self, client: "SalesforceClient"):
+        self.client = client
 
     def _get_base_url(self, api_version: Optional[str] = None) -> str:
         """Get the base URL for Bulk API v2 requests."""
-        return self.connection.get_base_url(api_version)
+        return self.client.get_base_url(api_version)
 
     def _get_job_url(self, job_id: str, api_version: Optional[str] = None) -> str:
         """Get the URL for a specific bulk job."""
@@ -57,7 +57,7 @@ class BulkV2API:
 
         :param soql_query: The SOQL query to execute
         :param all_rows: If True, includes deleted and archived records (queryAll)
-        :param api_version: API version to use (defaults to connection version)
+        :param api_version: API version to use (defaults to client version)
         :returns: Job information
         """
         job_url = self._get_jobs_url(api_version)
@@ -67,7 +67,7 @@ class BulkV2API:
             "contentType": "CSV",
         }
 
-        response = await self.connection.post(job_url, json=job_data)
+        response = await self.client.post(job_url, json=job_data)
         response.raise_for_status()
         job_info = response.json()
 
@@ -85,11 +85,11 @@ class BulkV2API:
         Get the status of a bulk job.
 
         :param job_id: The job ID
-        :param api_version: API version to use (defaults to connection version)
+        :param api_version: API version to use (defaults to client version)
         :returns: Job status information
         """
         status_url = self._get_job_url(job_id, api_version)
-        response = await self.connection.get(status_url)
+        response = await self.client.get(status_url)
         response.raise_for_status()
         return response.json()
 
@@ -106,7 +106,7 @@ class BulkV2API:
         :param job_id: The job ID
         :param locator: Query locator for pagination (optional)
         :param max_records: Maximum number of records to fetch
-        :param api_version: API version to use (defaults to connection version)
+        :param api_version: API version to use (defaults to client version)
         :returns: Tuple of (CSV response text, next locator or None)
         """
         results_url = self._get_job_results_url(job_id, api_version)
@@ -114,7 +114,7 @@ class BulkV2API:
         if locator:
             params["locator"] = locator
 
-        response = await self.connection.get(results_url, params=params)
+        response = await self.client.get(results_url, params=params)
         response.raise_for_status()
 
         # Get next locator from headers
@@ -137,7 +137,7 @@ class BulkV2API:
         :param job_id: The job ID to monitor
         :param poll_interval: Time in seconds between status checks
         :param timeout: Maximum time to wait (None for no timeout)
-        :param api_version: API version to use (defaults to connection version)
+        :param api_version: API version to use (defaults to client version)
         :returns: Final job status
         :raises TimeoutError: If job doesn't complete within timeout
         :raises Exception: If job fails
@@ -187,7 +187,7 @@ class BulkV2API:
         :param all_rows: If True, includes deleted and archived records
         :param poll_interval: Time in seconds between status checks
         :param timeout: Maximum time to wait (None for no timeout)
-        :param api_version: API version to use (defaults to connection version)
+        :param api_version: API version to use (defaults to client version)
         :returns: Final job status
         """
         # Create the job

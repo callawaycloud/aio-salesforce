@@ -2,48 +2,20 @@
 Parquet writer module for converting Salesforce QueryResult to Parquet format.
 """
 
-from __future__ import annotations
-
 import logging
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional
 from pathlib import Path
+import pyarrow as pa
+import pandas as pd
+import pyarrow.parquet as pq
 
-if TYPE_CHECKING:
-    import pyarrow as pa
-    import pandas as pd
-    import pyarrow.parquet as pq
+from ..api.describe.types import FieldInfo
 
-try:
-    import pyarrow as pa
-    import pandas as pd
-    import pyarrow.parquet as pq
-
-    _DEPENDENCIES_AVAILABLE = True
-except ImportError as e:
-    _DEPENDENCIES_AVAILABLE = False
-    _MISSING_DEPS = str(e)
-    # Create dummy objects to prevent import errors
-    pa = None
-    pd = None
-    pq = None
-
-from ..api.types import FieldInfo
-
-from .bulk_export import QueryResult, batch_records, batch_records_async
-
-
-def _check_dependencies():
-    """Check if required dependencies are available and raise helpful error if not."""
-    if not _DEPENDENCIES_AVAILABLE:
-        raise ImportError(
-            f"Missing required dependencies for exporter functionality: {_MISSING_DEPS}. "
-            "Install with: pip install 'aio-salesforce[exporter]' or uv add 'aio-salesforce[exporter]'"
-        )
+from .bulk_export import QueryResult, batch_records_async
 
 
 def salesforce_to_arrow_type(sf_type: str) -> pa.DataType:
     """Convert Salesforce data types to Arrow data types."""
-    _check_dependencies()
     type_mapping = {
         "string": pa.string(),
         "boolean": pa.bool_(),
@@ -75,7 +47,6 @@ def create_schema_from_metadata(fields_metadata: List[FieldInfo]) -> pa.Schema:
     :param fields_metadata: List of field metadata dictionaries from Salesforce
     :returns: PyArrow schema
     """
-    _check_dependencies()
     arrow_fields = []
     for field in fields_metadata:
         field_name = field.get("name", "").lower()  # Normalize to lowercase
@@ -108,7 +79,6 @@ class ParquetWriter:
         :param batch_size: Number of records to process in each batch
         :param convert_empty_to_null: Convert empty strings to null values
         """
-        _check_dependencies()
         self.file_path = file_path
         self.schema = schema
         self.batch_size = batch_size
@@ -119,19 +89,7 @@ class ParquetWriter:
         # Ensure parent directory exists
         Path(file_path).parent.mkdir(parents=True, exist_ok=True)
 
-    def write_query_result(self, query_result: QueryResult) -> None:
-        """
-        Write all records from a QueryResult to the parquet file.
-
-        :param query_result: QueryResult to write
-        """
-        try:
-            for batch in batch_records(query_result, self.batch_size):
-                self._write_batch(batch)
-        finally:
-            self.close()
-
-    async def write_query_result_async(self, query_result: QueryResult) -> None:
+    async def write_query_result(self, query_result: QueryResult) -> None:
         """
         Write all records from a QueryResult to the parquet file (async version).
 
@@ -258,44 +216,10 @@ class ParquetWriter:
             self._writer = None
 
 
-def write_query_to_parquet(
+async def write_query_to_parquet(
     query_result: QueryResult,
     file_path: str,
     fields_metadata: Optional[List[FieldInfo]] = None,
-    schema: Optional[pa.Schema] = None,
-    batch_size: int = 10000,
-    convert_empty_to_null: bool = True,
-) -> None:
-    """
-    Convenience function to write a QueryResult to a parquet file.
-
-    :param query_result: QueryResult to write
-    :param file_path: Path to output parquet file
-    :param fields_metadata: Optional Salesforce field metadata for schema creation
-    :param schema: Optional pre-created PyArrow schema (takes precedence over fields_metadata)
-    :param batch_size: Number of records to process in each batch
-    :param convert_empty_to_null: Convert empty strings to null values
-    """
-    effective_schema = None
-    if schema:
-        effective_schema = schema
-    elif fields_metadata:
-        effective_schema = create_schema_from_metadata(fields_metadata)
-
-    writer = ParquetWriter(
-        file_path=file_path,
-        schema=effective_schema,
-        batch_size=batch_size,
-        convert_empty_to_null=convert_empty_to_null,
-    )
-
-    writer.write_query_result(query_result)
-
-
-async def write_query_to_parquet_async(
-    query_result: QueryResult,
-    file_path: str,
-    fields_metadata: Optional[List[Dict[str, Any]]] = None,
     schema: Optional[pa.Schema] = None,
     batch_size: int = 10000,
     convert_empty_to_null: bool = True,
@@ -323,4 +247,4 @@ async def write_query_to_parquet_async(
         convert_empty_to_null=convert_empty_to_null,
     )
 
-    await writer.write_query_result_async(query_result)
+    await writer.write_query_result(query_result)

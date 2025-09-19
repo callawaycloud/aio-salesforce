@@ -2,14 +2,55 @@
 TypedDict definitions for Salesforce API responses.
 """
 
-from typing import Any, Dict, List, Optional, TypedDict, Union
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    TypedDict,
+    Union,
+    Generic,
+    TypeVar,
+    NotRequired,
+)
 
 
 class SalesforceAttributes(TypedDict):
     """Standard Salesforce record attributes."""
 
     type: str
-    url: str
+    url: NotRequired[str]  # Present in responses, not in requests
+
+
+# Generic type variable for record data
+RecordData = TypeVar("RecordData", bound=Dict[str, Any])
+
+
+class SalesforceRecord(TypedDict, Generic[RecordData]):
+    """
+    Generic Salesforce record structure with enforced attributes.
+
+    This type ensures that all Salesforce records have the required 'attributes' field
+    while allowing flexibility for the actual record data.
+
+    Usage:
+        # Generic usage (any fields allowed)
+        GenericRecord = SalesforceRecord[Dict[str, Any]]
+
+        # Specific typed usage when you know the fields
+        class AccountData(TypedDict, total=False):
+            Id: str
+            Name: str
+            Type: str
+
+        AccountRecord = SalesforceRecord[AccountData]
+    """
+
+    attributes: SalesforceAttributes
+
+
+# Convenience type alias
+GenericSalesforceRecord = SalesforceRecord[Dict[str, Any]]
 
 
 class OrganizationInfo(TypedDict):

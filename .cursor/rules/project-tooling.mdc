@@ -1,0 +1,6 @@
+---
+globs: *.py
+description: "Project tooling"
+---
+
+This project uses uv.  Do not use pip.

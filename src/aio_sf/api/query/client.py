@@ -1,14 +1,12 @@
 """Salesforce Query API client."""
 
-import logging
-import re
-import urllib.parse
+import asyncio
 from typing import Any, Dict, List, Optional, AsyncGenerator
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ...connection import SalesforceConnection
+    from ..client import SalesforceClient
 
 from .types import QueryResponse, QueryMoreResponse
 
@@ -51,6 +49,30 @@ class QueryResult:
         """Check if all records have been fetched."""
         return self._done and self._current_index >= len(self._records)
 
+    def __iter__(self):
+        """Synchronous iterator - collects all records in memory."""
+        # For backward compatibility, we'll collect all records in a blocking manner
+        # This is not ideal for large datasets, but maintains the existing API
+        try:
+            loop = asyncio.get_running_loop()
+            # If we're in an async context, we can't block
+            raise RuntimeError(
+                "Cannot iterate QueryResult synchronously when an async event loop is already running. "
+                "Use 'async for record in query_result' instead."
+            )
+        except RuntimeError as e:
+            if "Cannot iterate" in str(e):
+                raise e
+            # No event loop is running, we can create one
+            return asyncio.run(self._collect_all_records())
+
+    async def _collect_all_records(self):
+        """Collect all records into a list for synchronous iteration."""
+        records = []
+        async for record in self:
+            records.append(record)
+        return iter(records)
+
     async def __aiter__(self):
         """Async iterator that yields individual records."""
         # First, yield records from the initial response
@@ -83,19 +105,19 @@ class QueryResult:
 class QueryAPI:
     """Salesforce Query API client."""
 
-    def __init__(self, connection: "SalesforceConnection"):
-        """Initialize QueryAPI with a Salesforce connection."""
-        self._connection = connection
+    def __init__(self, client: "SalesforceClient"):
+        """Initialize QueryAPI with a Salesforce client."""
+        self._client = client
 
     def _get_query_url(self, api_version: Optional[str] = None) -> str:
         """Get the base URL for query requests."""
-        version = api_version or self._connection.version
-        return f"{self._connection.instance_url}/services/data/{version}/query"
+        version = api_version or self._client.version
+        return f"{self._client.instance_url}/services/data/{version}/query"
 
     def _get_queryall_url(self, api_version: Optional[str] = None) -> str:
         """Get the base URL for queryAll requests (includes deleted records)."""
-        version = api_version or self._connection.version
-        return f"{self._connection.instance_url}/services/data/{version}/queryAll"
+        version = api_version or self._client.version
+        return f"{self._client.instance_url}/services/data/{version}/queryAll"
 
     def _sanitize_soql(self, soql: str) -> str:
         """
@@ -140,7 +162,7 @@ class QueryAPI:
         params = {"q": sanitized_soql}
 
         # Make the request
-        response = await self._connection.get(url, params=params)
+        response = await self._client.get(url, params=params)
         response.raise_for_status()
 
         # Return QueryResult for iteration
@@ -155,12 +177,12 @@ class QueryAPI:
         """
         # The next_records_url is relative to the instance, so we need to construct the full URL
         if next_records_url.startswith("/"):
-            url = f"{self._connection.instance_url}{next_records_url}"
+            url = f"{self._client.instance_url}{next_records_url}"
         else:
             url = next_records_url
 
         # Make the request
-        response = await self._connection.get(url)
+        response = await self._client.get(url)
         response.raise_for_status()
         return response.json()
 
@@ -184,7 +206,7 @@ class QueryAPI:
         params = {"q": sanitized_soql, "explain": "true"}
 
         # Make the request
-        response = await self._connection.get(url, params=params)
+        response = await self._client.get(url, params=params)
         response.raise_for_status()
         return response.json()
 
@@ -205,12 +227,12 @@ class QueryAPI:
             raise ValueError("SOSL queries must start with FIND")
 
         # Prepare the request
-        version = api_version or self._connection.version
-        url = f"{self._connection.instance_url}/services/data/{version}/search"
+        version = api_version or self._client.version
+        url = f"{self._client.instance_url}/services/data/{version}/search"
         params = {"q": search.strip()}
 
         # Make the request
-        response = await self._connection.get(url, params=params)
+        response = await self._client.get(url, params=params)
         response.raise_for_status()
         data = response.json()
         return data.get("searchRecords", [])

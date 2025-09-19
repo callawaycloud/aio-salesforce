@@ -7,31 +7,6 @@ description: "Async programming patterns and conventions"
 
 This project uses async/await patterns throughout. Follow these conventions:
 
-## Connection Management
-- Always use `async with SalesforceConnection(auth_strategy=auth_strategy) as sf:` for connection handling
-- Connection objects should be passed to async functions, not created within them
-- Use `await sf.ensure_authenticated()` before making API calls
-
-## Bulk Query Patterns
-```python
-# Correct async bulk query usage
-query_result = await bulk_query(
-    sf=sf,
-    soql_query="SELECT Id, Name FROM Contact"
-)
-
-# Async iteration over results
-async for record in query_result:
-    # process record
-    pass
-```
-
-## Authentication Strategies
-- Use `ClientCredentialsAuth` for OAuth client credentials flow
-- Use `StaticTokenAuth` for existing access tokens
-- Use `RefreshTokenAuth` for refresh token flow
-
-## Error Handling
-- Catch `SalesforceAuthError` for authentication issues
-- Use proper async context managers for resource cleanup
-- Always handle connection timeouts and retries appropriately
+## Client Management
+- Always use `async with SalesforceClient(auth_strategy=auth_strategy) as sf:` for client handling
+- All API interaction should happen through the client object

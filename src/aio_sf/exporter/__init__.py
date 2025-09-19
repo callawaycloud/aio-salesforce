@@ -11,14 +11,12 @@ from .bulk_export import (
     resume_from_locator,
     write_records_to_csv,
     QueryResult,
-    batch_records,
     batch_records_async,
 )
 from .parquet_writer import (
     ParquetWriter,
     create_schema_from_metadata,
     write_query_to_parquet,
-    write_query_to_parquet_async,
     salesforce_to_arrow_type,
 )
 
@@ -28,11 +26,9 @@ __all__ = [
     "resume_from_locator",
     "write_records_to_csv",
     "QueryResult",
-    "batch_records",
     "batch_records_async",
     "ParquetWriter",
     "create_schema_from_metadata",
     "write_query_to_parquet",
-    "write_query_to_parquet_async",
     "salesforce_to_arrow_type",
 ]

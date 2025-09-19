@@ -4,7 +4,7 @@ import csv
 import asyncio
 
 from ..api.describe.types import FieldInfo
-from ..connection import SalesforceConnection
+from ..api.client import SalesforceClient
 
 
 class QueryResult:
@@ -15,7 +15,7 @@ class QueryResult:
 
     def __init__(
         self,
-        sf: SalesforceConnection,
+        sf: SalesforceClient,
         job_id: str,
         total_records: Optional[int] = None,
         query_locator: Optional[str] = None,
@@ -25,12 +25,12 @@ class QueryResult:
         """
         Initialize QueryResult.
 
-        :param sf: Salesforce connection instance
+        :param sf: Salesforce client instance
         :param job_id: Salesforce job ID
         :param total_records: Total number of records (None if unknown, e.g., when resuming)
         :param query_locator: Starting locator (None to start from beginning)
         :param batch_size: Number of records to fetch per batch
-        :param api_version: Salesforce API version (defaults to connection version)
+        :param api_version: Salesforce API version (defaults to client version)
         """
         self._sf = sf
         self._job_id = job_id
@@ -40,7 +40,7 @@ class QueryResult:
         self._api_version = api_version or sf.version
 
     def __iter__(self):
-        """Return the generator that yields individual records."""
+        """Synchronous iterator - collects all records in memory."""
         # For backward compatibility, we'll collect all records in a blocking manner
         # This is not ideal for large datasets, but maintains the existing API
         try:
@@ -48,7 +48,7 @@ class QueryResult:
             # If we're in an async context, we can't block
             raise RuntimeError(
                 "Cannot iterate QueryResult synchronously when an async event loop is already running. "
-                "Use 'async for record in query_result.aiter()' instead."
+                "Use 'async for record in query_result' instead."
             )
         except RuntimeError as e:
             if "Cannot iterate" in str(e):
@@ -56,10 +56,9 @@ class QueryResult:
             # No event loop is running, we can create one
             return asyncio.run(self._collect_all_records())
 
-    async def aiter(self):
-        """Async iterator that yields individual records."""
-        async for record in self._generate_records():
-            yield record
+    def __aiter__(self):
+        """Async iterator protocol - enables 'async for record in query_result'."""
+        return self._generate_records()
 
     async def _collect_all_records(self):
         """Collect all records into a list for synchronous iteration."""
@@ -176,7 +175,7 @@ class QueryResult:
 
 
 async def _wait_for_job_completion(
-    sf: SalesforceConnection,
+    sf: SalesforceClient,
     job_id: str,
     api_version: str,
     poll_interval: int,
@@ -185,7 +184,7 @@ async def _wait_for_job_completion(
     """
     Wait for a Salesforce bulk job to complete and return the total record count.
 
-    :param sf: Salesforce connection instance
+    :param sf: Salesforce client instance
     :param job_id: Job ID to monitor
     :param api_version: API version to use
     :param poll_interval: Time in seconds between status checks
@@ -205,7 +204,7 @@ async def _wait_for_job_completion(
 
 
 async def bulk_query(
-    sf: SalesforceConnection,
+    sf: SalesforceClient,
     soql_query: Optional[str],
     all_rows: bool = False,
     existing_job_id: Optional[str] = None,
@@ -218,7 +217,7 @@ async def bulk_query(
     """
     Executes a Salesforce query via the BULK2 API and returns a QueryResult.
 
-    :param sf: A SalesforceConnection instance containing access_token, instance_url, and version.
+    :param sf: A SalesforceClient instance containing access_token, instance_url, and version.
     :param soql_query: The SOQL query string to execute.
     :param all_rows: If True, includes deleted and archived records.
     :param existing_job_id: Use an existing batch ID to continue processing.
@@ -235,7 +234,7 @@ async def bulk_query(
     if query_locator and not existing_job_id:
         raise ValueError("query_locator may only be used with an existing job ID")
 
-    # Use connection version if no api_version specified
+    # Use client version if no api_version specified
     effective_api_version = api_version or sf.version
 
     # Step 1: Create the job (if needed)
@@ -270,7 +269,7 @@ async def bulk_query(
 
 
 def resume_from_locator(
-    sf: SalesforceConnection,
+    sf: SalesforceClient,
     job_id: str,
     locator: str,
     batch_size: int = 10000,
@@ -279,11 +278,11 @@ def resume_from_locator(
     """
     Resume a bulk query from a locator. Useful when you only have a locator and job_id.
 
-    :param sf: Salesforce connection instance
+    :param sf: Salesforce client instance
     :param job_id: Salesforce job ID
     :param locator: Query locator to resume from
     :param batch_size: Number of records to fetch per batch
-    :param api_version: Salesforce API version (defaults to connection version)
+    :param api_version: Salesforce API version (defaults to client version)
     :returns: QueryResult that can be iterated over (len() will raise error since total is unknown)
     """
     return QueryResult(
@@ -298,17 +297,17 @@ def resume_from_locator(
 
 # Helper function to get all fields that can be queried by bulk API
 async def get_bulk_fields(
-    sf: SalesforceConnection, object_type: str, api_version: Optional[str] = None
+    sf: SalesforceClient, object_type: str, api_version: Optional[str] = None
 ) -> List[FieldInfo]:
     """Get field metadata for queryable fields in a Salesforce object.
 
-    :param sf: Salesforce connection instance
+    :param sf: Salesforce client instance
     :param object_type: Name of the Salesforce object (e.g., 'Account', 'Contact')
-    :param api_version: API version to use (defaults to connection version)
+    :param api_version: API version to use (defaults to client version)
     :returns: List of field metadata dictionaries for queryable fields
     """
     # Use the metadata API to get object description
-    describe_data = await sf.metadata.describe_sobject(object_type, api_version)
+    describe_data = await sf.describe.sobject(object_type, api_version)
     fields_metadata = describe_data["fields"]
 
     # Create a set of all compound field names to exclude
@@ -357,26 +356,6 @@ def write_records_to_csv(
             writer.writerow(record)
 
 
-def batch_records(query_result: QueryResult, batch_size: int = 1000):
-    """
-    Convert individual records into batches for bulk operations.
-
-    :param query_result: QueryResult object yielding individual records
-    :param batch_size: Number of records per batch
-    :yields: Lists of records (batches)
-    """
-    batch = []
-    for record in query_result:
-        batch.append(record)
-        if len(batch) >= batch_size:
-            yield batch
-            batch = []
-
-    # Yield any remaining records
-    if batch:
-        yield batch
-
-
 async def batch_records_async(query_result: QueryResult, batch_size: int = 1000):
     """
     Convert individual records into batches for bulk operations (async version).
@@ -386,7 +365,7 @@ async def batch_records_async(query_result: QueryResult, batch_size: int = 1000)
     :yields: Lists of records (batches)
     """
     batch = []
-    async for record in query_result.aiter():
+    async for record in query_result:
         batch.append(record)
         if len(batch) >= batch_size:
             yield batch

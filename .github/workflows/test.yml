@@ -27,18 +27,22 @@ jobs:
     - name: Install dependencies
       run: uv sync --all-extras --dev
     
+    - name: Run unit tests
+      run: |
+        uv run pytest tests/ -v --cov=aio_sf --cov-report=xml
+    
     - name: Test core installation (no exporter)
       run: |
         uv run --isolated python -c "
-        from aio_salesforce import SalesforceConnection, ClientCredentialsAuth
+        from aio_sf import SalesforceClient, ClientCredentialsAuth
         print('✅ Core installation works')
         "
     
     - name: Test full installation (with exporter)
       run: |
         uv run python -c "
-        from aio_salesforce import SalesforceConnection
-        from aio_salesforce.exporter import bulk_query, ParquetWriter
+        from aio_sf import SalesforceClient
+        from aio_sf.exporter import bulk_query, ParquetWriter
         print('✅ Full installation works')
         "
     
@@ -48,4 +52,4 @@ jobs:
     - name: Test wheel installation
       run: |
         uv run --isolated pip install dist/*.whl
-        uv run --isolated python -c "import aio_salesforce; print('✅ Wheel installation works')"
+        uv run --isolated python -c "import aio_sf; print('✅ Wheel installation works')"

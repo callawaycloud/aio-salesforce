@@ -39,6 +39,7 @@ all = [
 ]
 dev = [
     "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
     "pytest-mock>=3.10.0",
     "black>=23.0.0",
@@ -54,13 +55,13 @@ Repository = "https://github.com/callawaycloud/aio-salesforce"
 Issues = "https://github.com/callawaycloud/aio-salesforce/issues"
 
 # [project.scripts]
-# aio-salesforce = "aio_salesforce.cli:main"  # CLI not implemented yet
+# aio-sf = "aio_sf.cli:main"  # CLI not implemented yet
 
 [tool.hatch.version]
-path = "src/aio_salesforce/__init__.py"
+path = "src/aio_sf/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/aio_salesforce"]
+packages = ["src/aio_sf"]
 
 # Black configuration
 [tool.black]
@@ -145,4 +146,10 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
 ]

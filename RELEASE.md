@@ -26,7 +26,7 @@
 - **Purpose**: Test your packaging pipeline
 
 ### Tagged Push → PyPI  
-1. **Update version** in `src/aio_salesforce/__init__.py`:
+1. **Update version** in `src/aio_sf/__init__.py`:
    ```python
    __version__ = "0.2.0"  # Update this
    ```

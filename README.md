@@ -1,27 +1,30 @@
 # aio-sf
 
-An async Salesforce library for Python with Bulk API 2.0 support.
+An async Salesforce library for Python.
 
 ## Features
 
 ### ✅ Supported APIs
-- [x] **OAuth Client Credentials Flow** - Automatic authentication
 - [x] **Bulk API 2.0** - Efficient querying of large datasets
 - [x] **Describe API** - Field metadata and object descriptions
 - [x] **SOQL Query API** - Standard Salesforce queries
-
-### 🔄 Planned APIs
-- [ ] **SObjects API** - Standard CRUD operations
+- [x] **SObjects Collections API** - CRUD on collections of SObjects (up to 2000 records at a time)
 - [ ] **Tooling API** - Development and deployment tools
 - [ ] **Bulk API 1.0** - Legacy bulk operations
 - [ ] **Streaming API** - Real-time event streaming
+
+### ✅ Supported Authentication Strategies
+- [x] **OAuth Client Credentials** - Automatic authentication
+- [x] **Static Token** - Existing access tokens
+- [x] **Refresh Token** - Refresh token flow
+- [x] **SFDX CLI** - Login by grabbing a token from the SFDX CLI
+- [ ] **Password Authentication** - Password + ST authentication (soap login)
 
 ### 🚀 Export Features
 - [x] **Parquet Export** - Efficient columnar storage with schema mapping
 - [x] **CSV Export** - Simple text format export
 - [x] **Resume Support** - Resume interrupted queries using job IDs
 - [x] **Streaming Processing** - Memory-efficient processing of large datasets
-- [x] **Type Mapping** - Automatic Salesforce to PyArrow type conversion
 
 ## Installation
 
@@ -43,7 +46,7 @@ uv add "aio-sf[exporter]"
 ```python
 import asyncio
 import os
-from aio_salesforce import SalesforceConnection, ClientCredentialsAuth
+from aio_sf import SalesforceClient, ClientCredentialsAuth
 
 async def main():
     auth = ClientCredentialsAuth(
@@ -52,7 +55,7 @@ async def main():
         instance_url=os.getenv('SF_INSTANCE_URL'),
     )
     
-    async with SalesforceConnection(auth_strategy=auth) as sf:
+    async with SalesforceClient(auth_strategy=auth) as sf:
         print(f"✅ Connected to: {sf.instance_url}")
 
         sobjects = await sf.describe.list_sobjects()
@@ -72,12 +75,18 @@ async def main():
 
         query_result = await sf.query.soql(query)
         # Loop over records using async iteration
+        # or: await query_result.collect_all() to collect all records into a list
         async for record in query_result:
             print(record.get("AccountId"))
 
+        # Create a new Account
+        await sf.collections.insert(
+            sobject_type="Account",
+            records=[{"Name": "Test Account"}]
+        )
+
 asyncio.run(main())
 ```
-
 
 
 
@@ -85,37 +94,15 @@ asyncio.run(main())
 
 The Exporter library contains a streamlined and "opinionated" way to export data from Salesforce to various formats.  
 
-### 2. Query Records
-```python
-from aio_salesforce.exporter import bulk_query
-
-async def main():
-    # ... authentication code from above ...
-    
-    async with SalesforceConnection(auth_strategy=auth) as sf:
-        # Execute bulk query
-        query_result = await bulk_query(
-            sf=sf,
-            soql_query="SELECT Id, Name, Email FROM Contact LIMIT 1000"
-        )
-        
-        # Process records
-        count = 0
-        async for record in query_result:
-            print(f"Contact: {record['Name']} - {record['Email']}")
-            count += 1
-            
-        print(f"Processed {count} records")
-```
 
 ### 3. Export to Parquet
 ```python
-from aio_salesforce.exporter import bulk_query, write_query_to_parquet
+from aio_sf.exporter import bulk_query, write_query_to_parquet
 
 async def main():
     # ... authentication code from above ...
     
-    async with SalesforceConnection(auth_strategy=auth) as sf:
+    async with SalesforceClient(auth_strategy=auth) as sf:
         # Query with proper schema
         query_result = await bulk_query(
             sf=sf,

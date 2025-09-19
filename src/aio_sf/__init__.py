@@ -4,24 +4,26 @@ __version__ = "0.1.0b1"
 __author__ = "Jonas"
 __email__ = "charlie@callaway.cloud"
 
-# Connection functionality
-from .connection import (  # noqa: F401
-    SalesforceConnection,
+# Client functionality
+from .api.client import SalesforceClient  # noqa: F401
+from .api.auth import (  # noqa: F401
     SalesforceAuthError,
     AuthStrategy,
     ClientCredentialsAuth,
     RefreshTokenAuth,
     StaticTokenAuth,
+    SfdxCliAuth,
 )
 
-# Core package only exports connection functionality
-# Users import exporter functions directly: from aio_salesforce.exporter import bulk_query
+# Core package only exports client functionality
+# Users import exporter functions directly: from aio_sf.exporter import bulk_query
 
 __all__ = [
-    "SalesforceConnection",
+    "SalesforceClient",
     "SalesforceAuthError",
     "AuthStrategy",
     "ClientCredentialsAuth",
     "RefreshTokenAuth",
     "StaticTokenAuth",
+    "SfdxCliAuth",
 ]

@@ -3,7 +3,7 @@ Salesforce Describe API methods.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
 from .types import (
     OrganizationInfo,
@@ -13,7 +13,7 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from ...connection import SalesforceConnection
+    from ..client import SalesforceClient
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 class DescribeAPI:
     """Salesforce Describe API methods."""
 
-    def __init__(self, connection: "SalesforceConnection"):
-        self.connection = connection
+    def __init__(self, client: "SalesforceClient"):
+        self.client = client
 
     async def sobject(
         self, sobject_type: str, api_version: Optional[str] = None
@@ -31,11 +31,11 @@ class DescribeAPI:
         Get metadata for a Salesforce object.
 
         :param sobject_type: Name of the Salesforce object (e.g., 'Account', 'Contact')
-        :param api_version: API version to use (defaults to connection version)
+        :param api_version: API version to use (defaults to client version)
         :returns: Object metadata dictionary
         """
-        url = self.connection.get_describe_url(sobject_type, api_version)
-        response = await self.connection.get(url)
+        url = self.client.get_describe_url(sobject_type, api_version)
+        response = await self.client.get(url)
         response.raise_for_status()
         return response.json()
 
@@ -45,12 +45,12 @@ class DescribeAPI:
         """
         List all available Salesforce objects.
 
-        :param api_version: API version to use (defaults to connection version)
+        :param api_version: API version to use (defaults to client version)
         :returns: List of object metadata dictionaries
         """
-        base_url = self.connection.get_base_url(api_version)
+        base_url = self.client.get_base_url(api_version)
         url = f"{base_url}/sobjects"
-        response = await self.connection.get(url)
+        response = await self.client.get(url)
         response.raise_for_status()
         data = response.json()
         return data.get("sobjects", [])
@@ -59,12 +59,12 @@ class DescribeAPI:
         """
         Get organization limits.
 
-        :param api_version: API version to use (defaults to connection version)
+        :param api_version: API version to use (defaults to client version)
         :returns: Organization limits dictionary
         """
-        base_url = self.connection.get_base_url(api_version)
+        base_url = self.client.get_base_url(api_version)
         url = f"{base_url}/limits"
-        response = await self.connection.get(url)
+        response = await self.client.get(url)
         response.raise_for_status()
         return response.json()
 
@@ -74,16 +74,16 @@ class DescribeAPI:
         """
         Get organization information.
 
-        :param api_version: API version to use (defaults to connection version)
+        :param api_version: API version to use (defaults to client version)
         :returns: Organization info dictionary
         """
         # Query the Organization object for basic org info
-        base_url = self.connection.get_base_url(api_version)
+        base_url = self.client.get_base_url(api_version)
         url = f"{base_url}/query"
         params = {
             "q": "SELECT Id, Name, OrganizationType, InstanceName, IsSandbox FROM Organization LIMIT 1"
         }
-        response = await self.connection.get(url, params=params)
+        response = await self.client.get(url, params=params)
         response.raise_for_status()
         data = response.json()
 
