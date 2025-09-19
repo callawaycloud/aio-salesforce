@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
@@ -56,7 +56,7 @@ Issues = "https://github.com/callawaycloud/aio-salesforce/issues"
 # aio-sf = "aio_sf.cli:main"  # CLI not implemented yet
 
 [tool.hatch.version]
-path = "src/aio_sf/__init__.py"
+source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aio_sf"]

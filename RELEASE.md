@@ -26,12 +26,7 @@
 - **Purpose**: Test your packaging pipeline
 
 ### Tagged Push → PyPI  
-1. **Update version** in `src/aio_sf/__init__.py`:
-   ```python
-   __version__ = "0.2.0"  # Update this
-   ```
-
-2. **Create and push tag**:
+1. **Create and push tag** (version is automatically derived from tag):
    ```bash
    git add -A
    git commit -m "Release v0.2.0"
@@ -39,7 +34,7 @@
    git push origin main --tags
    ```
 
-3. **Automatic PyPI Publishing**:
+2. **Automatic PyPI Publishing**:
    - GitHub Actions detects the tag
    - Builds and publishes to PyPI automatically
    - Requires manual approval in the `pypi` environment
@@ -71,14 +66,19 @@ pip install --index-url https://test.pypi.org/simple/ aio-salesforce
 
 ## Version Strategy
 
+### Automatic Versioning
+- **Version is automatically derived from Git tags** - no manual version updates needed!
+- **Tagged commits**: Use the exact tag (e.g., `v0.2.0` → version `0.2.0`)
+- **Development builds**: Auto-generate dev versions (e.g., `0.1.0b3.dev0+gf2b7d84`)
+
+### Semantic Versioning
 - **Patch** (0.1.1): Bug fixes, small improvements
-- **Minor** (0.2.0): New features, backwards compatible
+- **Minor** (0.2.0): New features, backwards compatible  
 - **Major** (1.0.0): Breaking changes
 
 ## Checklist Before Release
 
-- [ ] Update version in `__init__.py`
-- [ ] Update CHANGELOG (if you have one)
 - [ ] All tests passing in CI
-- [ ] Documentation updated
+- [ ] Documentation updated  
 - [ ] No breaking changes (or properly documented)
+- [ ] Choose appropriate tag name (version is automatically derived from tag)

@@ -1,6 +1,5 @@
 """aio-salesforce: Async Salesforce library for Python with Bulk API 2.0 support."""
 
-__version__ = "0.1.0b2"
 __author__ = "Jonas"
 __email__ = "charlie@callaway.cloud"
 
