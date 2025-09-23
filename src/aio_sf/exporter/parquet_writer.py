@@ -3,7 +3,7 @@ Parquet writer module for converting Salesforce QueryResult to Parquet format.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 from pathlib import Path
 import pyarrow as pa
 import pandas as pd
@@ -40,16 +40,22 @@ def salesforce_to_arrow_type(sf_type: str) -> pa.DataType:
     return type_mapping.get(sf_type.lower(), pa.string())
 
 
-def create_schema_from_metadata(fields_metadata: List[FieldInfo]) -> pa.Schema:
+def create_schema_from_metadata(
+    fields_metadata: List[FieldInfo],
+    column_formatter: Optional[Callable[[str], str]] = None,
+) -> pa.Schema:
     """
     Create a PyArrow schema from Salesforce field metadata.
 
     :param fields_metadata: List of field metadata dictionaries from Salesforce
+    :param column_formatter: Optional function to format column names
     :returns: PyArrow schema
     """
     arrow_fields = []
     for field in fields_metadata:
-        field_name = field.get("name", "").lower()  # Normalize to lowercase
+        field_name = field.get("name", "")
+        if column_formatter:
+            field_name = column_formatter(field_name)
         sf_type = field.get("type", "string")
         arrow_type = salesforce_to_arrow_type(sf_type)
         # All fields are nullable since Salesforce can return empty values
@@ -70,6 +76,7 @@ class ParquetWriter:
         schema: Optional[pa.Schema] = None,
         batch_size: int = 10000,
         convert_empty_to_null: bool = True,
+        column_formatter: Optional[Callable[[str], str]] = None,
     ):
         """
         Initialize ParquetWriter.
@@ -78,11 +85,13 @@ class ParquetWriter:
         :param schema: Optional PyArrow schema. If None, will be inferred from first batch
         :param batch_size: Number of records to process in each batch
         :param convert_empty_to_null: Convert empty strings to null values
+        :param column_formatter: Optional function to format column names. If None, no formatting is applied
         """
         self.file_path = file_path
         self.schema = schema
         self.batch_size = batch_size
         self.convert_empty_to_null = convert_empty_to_null
+        self.column_formatter = column_formatter
         self._writer = None
         self._schema_finalized = False
 
@@ -106,10 +115,15 @@ class ParquetWriter:
         if not batch:
             return
 
-        # Convert field names to lowercase for consistency
+        # Apply column formatting if specified
         converted_batch = []
         for record in batch:
-            converted_record = {k.lower(): v for k, v in record.items()}
+            if self.column_formatter:
+                converted_record = {
+                    self.column_formatter(k): v for k, v in record.items()
+                }
+            else:
+                converted_record = record.copy()
             converted_batch.append(converted_record)
 
         # Create DataFrame
@@ -228,6 +242,7 @@ async def write_query_to_parquet(
     schema: Optional[pa.Schema] = None,
     batch_size: int = 10000,
     convert_empty_to_null: bool = True,
+    column_formatter: Optional[Callable[[str], str]] = None,
 ) -> None:
     """
     Convenience function to write a QueryResult to a parquet file (async version).
@@ -238,18 +253,22 @@ async def write_query_to_parquet(
     :param schema: Optional pre-created PyArrow schema (takes precedence over fields_metadata)
     :param batch_size: Number of records to process in each batch
     :param convert_empty_to_null: Convert empty strings to null values
+    :param column_formatter: Optional function to format column names
     """
     effective_schema = None
     if schema:
         effective_schema = schema
     elif fields_metadata:
-        effective_schema = create_schema_from_metadata(fields_metadata)
+        effective_schema = create_schema_from_metadata(
+            fields_metadata, column_formatter
+        )
 
     writer = ParquetWriter(
         file_path=file_path,
         schema=effective_schema,
         batch_size=batch_size,
         convert_empty_to_null=convert_empty_to_null,
+        column_formatter=column_formatter,
     )
 
     await writer.write_query_result(query_result)
