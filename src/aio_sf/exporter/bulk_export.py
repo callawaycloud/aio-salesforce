@@ -316,18 +316,11 @@ async def get_bulk_fields(fields_metadata: List[FieldInfo]) -> List[FieldInfo]:
     """Get field metadata for queryable fields in a Salesforce object."""
     # Use the metadata API to get object description
 
-    # Create a set of all compound field names to exclude
-    compound_field_names = {
-        field.get("compoundFieldName")
-        for field in fields_metadata
-        if field.get("compoundFieldName")
-    }
-
-    # Filter to only queryable fields that aren't compound fields
+    # Filter to only queryable fields that aren't compound fields (unless field is actually name)
     queryable_fields = [
         field
         for field in fields_metadata
-        if field.get("name") not in compound_field_names
+        if field.get("type") not in ["address", "location"]
     ]
 
     return queryable_fields
