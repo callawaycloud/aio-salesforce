@@ -14,9 +14,8 @@ from .api.auth import (  # noqa: F401
     SfdxCliAuth,
 )
 
-# Core package only exports client functionality
-# Users import exporter functions directly: from aio_sf.exporter import bulk_query
-
+# Core package exports client functionality
+# Exporter functionality is included by default, but gracefully handles missing deps
 __all__ = [
     "SalesforceClient",
     "SalesforceAuthError",
@@ -26,3 +25,37 @@ __all__ = [
     "StaticTokenAuth",
     "SfdxCliAuth",
 ]
+
+# Try to import exporter functionality if dependencies are available
+try:
+    from .exporter import (  # noqa: F401
+        bulk_query,
+        get_bulk_fields,
+        resume_from_locator,
+        write_records_to_csv,
+        QueryResult,
+        batch_records_async,
+        ParquetWriter,
+        create_schema_from_metadata,
+        write_query_to_parquet,
+        salesforce_to_arrow_type,
+    )
+
+    __all__.extend(
+        [
+            "bulk_query",
+            "get_bulk_fields",
+            "resume_from_locator",
+            "write_records_to_csv",
+            "QueryResult",
+            "batch_records_async",
+            "ParquetWriter",
+            "create_schema_from_metadata",
+            "write_query_to_parquet",
+            "salesforce_to_arrow_type",
+        ]
+    )
+
+except ImportError:
+    # Exporter dependencies not available - this is fine for core-only installs
+    pass

@@ -28,16 +28,16 @@ An async Salesforce library for Python.
 
 ## Installation
 
-### Core (Connection Only)
+### Full Package (Default - Includes Everything)
 ```bash
 uv add aio-sf
 # or: pip install aio-sf
 ```
 
-### With Export Capabilities
+### Core Only (Minimal Dependencies)
 ```bash
-uv add "aio-sf[exporter]"
-# or: pip install "aio-sf[exporter]"
+uv add "aio-sf[core]"
+# or: pip install "aio-sf[core]"
 ```
 
 ## Quick Start
@@ -97,7 +97,11 @@ The Exporter library contains a streamlined and "opinionated" way to export data
 
 ### 3. Export to Parquet
 ```python
-from aio_sf.exporter import bulk_query, write_query_to_parquet
+# With full installation (default), you can import directly from aio_sf
+from aio_sf import SalesforceClient, ClientCredentialsAuth, bulk_query, write_query_to_parquet
+
+# Or import from the exporter module (both work)
+# from aio_sf.exporter import bulk_query, write_query_to_parquet
 
 async def main():
     # ... authentication code from above ...

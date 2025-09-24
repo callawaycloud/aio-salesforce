@@ -24,16 +24,21 @@ dependencies = [
     "httpx>=0.25.0",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
-]
-
-[project.optional-dependencies]
-exporter = [
     "pandas>=2.0.0",
     "pyarrow>=10.0.0",
     "boto3>=1.34.0",  # For S3 uploads (future feature)
 ]
-all = [
-    "aio-sf[exporter]",
+
+[project.optional-dependencies]
+core = [
+    "httpx>=0.25.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+]
+exporter = [
+    "pandas>=2.0.0",
+    "pyarrow>=10.0.0",
+    "boto3>=1.34.0",  # For S3 uploads (future feature)
 ]
 dev = [
     "pytest>=7.0.0",

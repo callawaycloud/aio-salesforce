@@ -39,31 +39,6 @@
    - Builds and publishes to PyPI automatically
    - Requires manual approval in the `pypi` environment
 
-## Manual Release (Backup)
-
-If you need to publish manually:
-
-```bash
-# Build the package
-uv build
-
-# Publish to PyPI (requires PYPI_API_TOKEN env var)
-export PYPI_API_TOKEN=your_token_here
-uv publish --token $PYPI_API_TOKEN
-```
-
-## Test Release
-
-To test on TestPyPI first:
-
-```bash
-# Get TestPyPI token from test.pypi.org
-uv publish --repository testpypi --token $TEST_PYPI_TOKEN
-
-# Test install from TestPyPI
-pip install --index-url https://test.pypi.org/simple/ aio-salesforce
-```
-
 ## Version Strategy
 
 ### Automatic Versioning
