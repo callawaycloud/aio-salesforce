@@ -16,24 +16,20 @@ from .bulk_export import QueryResult, batch_records_async
 
 
 def salesforce_to_arrow_type(
-    sf_type: str, convert_datetime_to_timestamp: bool = True
+    sf_type: str, type_mapping_overrides: Optional[Dict[str, pa.DataType]] = None
 ) -> pa.DataType:
     """Convert Salesforce data types to Arrow data types.
 
     :param sf_type: Salesforce field type
-    :param convert_datetime_to_timestamp: If True, datetime fields use timestamp type, otherwise string
+    :param type_mapping_overrides: Optional dict to override default type mappings
     """
-    type_mapping = {
+    default_type_mapping = {
         "string": pa.string(),
         "boolean": pa.bool_(),
         "int": pa.int64(),
         "double": pa.float64(),
-        "date": pa.string(),  # Always store as string since SF returns ISO format
-        "datetime": (
-            pa.timestamp("us", tz="UTC")
-            if convert_datetime_to_timestamp
-            else pa.string()
-        ),
+        "date": pa.date32(),  # Store as proper date type
+        "datetime": pa.timestamp("us", tz="UTC"),
         "currency": pa.float64(),
         "reference": pa.string(),
         "picklist": pa.string(),
@@ -48,20 +44,27 @@ def salesforce_to_arrow_type(
         "base64": pa.string(),
         "anyType": pa.string(),
     }
+
+    # Apply overrides if provided
+    if type_mapping_overrides:
+        type_mapping = {**default_type_mapping, **type_mapping_overrides}
+    else:
+        type_mapping = default_type_mapping
+
     return type_mapping.get(sf_type.lower(), pa.string())
 
 
 def create_schema_from_metadata(
     fields_metadata: List[FieldInfo],
     column_formatter: Optional[Callable[[str], str]] = None,
-    convert_datetime_to_timestamp: bool = True,
+    type_mapping_overrides: Optional[Dict[str, pa.DataType]] = None,
 ) -> pa.Schema:
     """
     Create a PyArrow schema from Salesforce field metadata.
 
     :param fields_metadata: List of field metadata dictionaries from Salesforce
     :param column_formatter: Optional function to format column names
-    :param convert_datetime_to_timestamp: If True, datetime fields use timestamp type, otherwise string
+    :param type_mapping_overrides: Optional dict to override default type mappings
     :returns: PyArrow schema
     """
     arrow_fields = []
@@ -70,7 +73,7 @@ def create_schema_from_metadata(
         if column_formatter:
             field_name = column_formatter(field_name)
         sf_type = field.get("type", "string")
-        arrow_type = salesforce_to_arrow_type(sf_type, convert_datetime_to_timestamp)
+        arrow_type = salesforce_to_arrow_type(sf_type, type_mapping_overrides)
         # All fields are nullable since Salesforce can return empty values
         arrow_fields.append(pa.field(field_name, arrow_type, nullable=True))
 
@@ -90,7 +93,7 @@ class ParquetWriter:
         batch_size: int = 10000,
         convert_empty_to_null: bool = True,
         column_formatter: Optional[Callable[[str], str]] = None,
-        convert_datetime_to_timestamp: bool = True,
+        type_mapping_overrides: Optional[Dict[str, pa.DataType]] = None,
     ):
         """
         Initialize ParquetWriter.
@@ -100,14 +103,14 @@ class ParquetWriter:
         :param batch_size: Number of records to process in each batch
         :param convert_empty_to_null: Convert empty strings to null values
         :param column_formatter: Optional function to format column names. If None, no formatting is applied
-        :param convert_datetime_to_timestamp: If True, datetime fields are converted to timestamps, otherwise stored as strings
+        :param type_mapping_overrides: Optional dict to override default type mappings
         """
         self.file_path = file_path
         self.schema = schema
         self.batch_size = batch_size
         self.convert_empty_to_null = convert_empty_to_null
         self.column_formatter = column_formatter
-        self.convert_datetime_to_timestamp = convert_datetime_to_timestamp
+        self.type_mapping_overrides = type_mapping_overrides
         self._writer = None
         self._schema_finalized = False
 
@@ -248,6 +251,11 @@ class ParquetWriter:
                     df[field_name] = self._convert_datetime_strings_to_timestamps(
                         datetime_series
                     )
+            elif pa.types.is_date(field.type):
+                # Convert Salesforce ISO date strings to dates
+                date_series = df[field_name]
+                if isinstance(date_series, pd.Series):
+                    df[field_name] = self._convert_date_strings_to_dates(date_series)
 
             # Replace empty strings with None for non-string fields
             if not pa.types.is_string(field.type):
@@ -290,6 +298,36 @@ class ParquetWriter:
             # This shouldn't happen, but handle it gracefully
             return pd.Series(result, index=series.index)
 
+    def _convert_date_strings_to_dates(self, series: pd.Series) -> pd.Series:
+        """
+        Convert Salesforce ISO date strings to pandas date objects.
+
+        Salesforce returns date in ISO format like '2025-10-01'.
+        """
+
+        def parse_sf_date(date_str):
+            if pd.isna(date_str) or date_str == "" or date_str is None:
+                return pd.NaT
+
+            try:
+                # Handle Salesforce date format (YYYY-MM-DD)
+                date_str = str(date_str).strip()
+
+                # Use pandas to_datetime for date parsing, then convert to date
+                return pd.to_datetime(date_str, format="%Y-%m-%d").date()
+
+            except (ValueError, TypeError) as e:
+                logging.warning(f"Failed to parse date string '{date_str}': {e}")
+                return pd.NaT
+
+        # Apply the conversion function to the series
+        result = series.apply(parse_sf_date)
+        if isinstance(result, pd.Series):
+            return result
+        else:
+            # This shouldn't happen, but handle it gracefully
+            return pd.Series(result, index=series.index)
+
     def close(self) -> None:
         """Close the parquet writer."""
         if self._writer:
@@ -305,7 +343,7 @@ async def write_query_to_parquet(
     batch_size: int = 10000,
     convert_empty_to_null: bool = True,
     column_formatter: Optional[Callable[[str], str]] = None,
-    convert_datetime_to_timestamp: bool = True,
+    type_mapping_overrides: Optional[Dict[str, pa.DataType]] = None,
 ) -> None:
     """
     Convenience function to write a QueryResult to a parquet file (async version).
@@ -317,14 +355,14 @@ async def write_query_to_parquet(
     :param batch_size: Number of records to process in each batch
     :param convert_empty_to_null: Convert empty strings to null values
     :param column_formatter: Optional function to format column names
-    :param convert_datetime_to_timestamp: If True, datetime fields are converted to timestamps, otherwise stored as strings
+    :param type_mapping_overrides: Optional dict to override default type mappings
     """
     effective_schema = None
     if schema:
         effective_schema = schema
     elif fields_metadata:
         effective_schema = create_schema_from_metadata(
-            fields_metadata, column_formatter, convert_datetime_to_timestamp
+            fields_metadata, column_formatter, type_mapping_overrides
         )
 
     writer = ParquetWriter(
@@ -333,7 +371,7 @@ async def write_query_to_parquet(
         batch_size=batch_size,
         convert_empty_to_null=convert_empty_to_null,
         column_formatter=column_formatter,
-        convert_datetime_to_timestamp=convert_datetime_to_timestamp,
+        type_mapping_overrides=type_mapping_overrides,
     )
 
     await writer.write_query_result(query_result)

@@ -320,7 +320,7 @@ async def get_bulk_fields(fields_metadata: List[FieldInfo]) -> List[FieldInfo]:
     queryable_fields = [
         field
         for field in fields_metadata
-        if field.get("type") not in ["address", "location"]
+        if field.get("type") not in ["address", "location", "base64"]
     ]
 
     return queryable_fields
