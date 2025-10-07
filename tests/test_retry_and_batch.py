@@ -2,7 +2,7 @@
 
 import pytest
 import asyncio
-from aio_sf.api.collections import CollectionsAPI, ProgressInfo
+from aio_sf.api.collections import CollectionsAPI, ResultInfo
 
 
 class MockClient:
@@ -463,31 +463,38 @@ class TestProgressTracking:
             ]
         )
 
-        progress_calls = []
+        result_calls = []
 
-        async def progress_callback(progress: ProgressInfo):
-            progress_calls.append(dict(progress))
+        async def result_callback(result: ResultInfo):
+            result_calls.append(dict(result))
 
         results = await collections_api.insert(
             records,
             sobject_type="Account",
             batch_size=200,
-            on_batch_complete=progress_callback,
+            on_result=result_callback,
         )
 
         assert len(results) == 300
-        # With the new design, callback is invoked once per attempt (after all batches)
-        # Since all records succeed on first attempt, we get 1 callback
-        assert len(progress_calls) == 1
+        # With the new design, callback is invoked once per batch
+        # 300 records with batch_size=200 means 2 batches
+        assert len(result_calls) == 2
 
-        # Verify progress data - after attempt completes, all succeeded
-        assert progress_calls[0]["total_records"] == 300
-        assert progress_calls[0]["current_batch_size"] == 200
-        assert progress_calls[0]["current_concurrency"] == 5  # default
-        assert progress_calls[0]["current_attempt"] == 1
-        assert progress_calls[0]["records_succeeded"] == 300
-        assert progress_calls[0]["records_failed"] == 0
-        assert progress_calls[0]["records_pending"] == 0
+        # Both callbacks split successes and errors
+        assert len(result_calls[0]["successes"]) == 200
+        assert len(result_calls[0]["errors"]) == 0
+        assert len(result_calls[1]["successes"]) == 100
+        assert len(result_calls[1]["errors"]) == 0
+
+        # Verify successes are properly typed CollectionResults
+        assert all(r.get("success") for r in result_calls[0]["successes"])
+        assert all(r.get("id") is not None for r in result_calls[0]["successes"])
+
+        # Context information is provided
+        assert result_calls[0]["total_records"] == 300
+        assert result_calls[0]["current_batch_size"] == 200
+        assert result_calls[0]["current_concurrency"] == 5
+        assert result_calls[0]["current_attempt"] == 1
 
     @pytest.mark.asyncio
     async def test_progress_with_retries(self, client):
@@ -517,36 +524,39 @@ class TestProgressTracking:
             ]
         )
 
-        progress_calls = []
+        result_calls = []
 
-        async def progress_callback(progress: ProgressInfo):
-            progress_calls.append(dict(progress))
+        async def result_callback(result: ResultInfo):
+            result_calls.append(dict(result))
 
         results = await collections_api.insert(
             records,
             sobject_type="Account",
             batch_size=200,
             max_attempts=2,
-            on_batch_complete=progress_callback,
+            on_result=result_callback,
         )
 
         assert len(results) == 10
         assert all(r["success"] for r in results)
 
-        # Should have 2 progress callbacks (initial + retry)
-        assert len(progress_calls) == 2
+        # Should have 2 callbacks (initial attempt + retry attempt)
+        assert len(result_calls) == 2
 
-        # First attempt: all failed, all pending retry
-        assert progress_calls[0]["current_attempt"] == 1
-        assert progress_calls[0]["records_succeeded"] == 0
-        assert progress_calls[0]["records_failed"] == 0
-        assert progress_calls[0]["records_pending"] == 10
+        # First attempt: all failed - errors array contains them
+        assert result_calls[0]["current_attempt"] == 1
+        assert len(result_calls[0]["successes"]) == 0
+        assert len(result_calls[0]["errors"]) == 10
+        # Can inspect error codes in errors array
+        for error in result_calls[0]["errors"]:
+            assert not error.get("success")
+            assert error["errors"][0]["statusCode"] == "UNABLE_TO_LOCK_ROW"
 
-        # Second attempt: all succeeded
-        assert progress_calls[1]["current_attempt"] == 2
-        assert progress_calls[1]["records_succeeded"] == 10
-        assert progress_calls[1]["records_failed"] == 0
-        assert progress_calls[1]["records_pending"] == 0
+        # Second attempt: all succeeded - successes array contains them
+        assert result_calls[1]["current_attempt"] == 2
+        assert len(result_calls[1]["successes"]) == 10
+        assert len(result_calls[1]["errors"]) == 0
+        assert all(r.get("success") for r in result_calls[1]["successes"])
 
 
 class TestConcurrencyScaling:

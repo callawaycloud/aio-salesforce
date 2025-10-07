@@ -17,21 +17,25 @@ from .types import CollectionResult
 logger = logging.getLogger(__name__)
 
 
-class ProgressInfo(TypedDict):
-    """Progress information for batch operations."""
+class ResultInfo(TypedDict):
+    """Result information provided after each batch completes."""
 
+    successes: List[CollectionResult]  # Successful results from this batch
+    errors: List[
+        CollectionResult
+    ]  # Failed results from this batch (API and HTTP errors)
     total_records: int  # Total records being processed
     records_completed: int  # Records finished (succeeded or failed permanently)
-    records_succeeded: int  # Records that succeeded
-    records_failed: int  # Records that failed permanently (exhausted retries)
+    records_succeeded: int  # Records that succeeded so far
+    records_failed: int  # Records that failed permanently so far
     records_pending: int  # Records still being retried
     current_attempt: int  # Current retry attempt number (1-indexed)
     current_batch_size: int  # Batch size for current attempt
     current_concurrency: int  # Concurrency level for current attempt
 
 
-# Type alias for progress callback
-ProgressCallback = Callable[[ProgressInfo], Awaitable[None]]
+# Type alias for result callback
+ResultCallback = Callable[[ResultInfo], Awaitable[None]]
 
 
 def split_into_batches(
@@ -65,8 +69,9 @@ async def process_batches_concurrently(
     operation_func,
     max_concurrent_batches: int,
     total_records: int,
-    on_batch_complete: Optional[ProgressCallback] = None,
+    on_result: Optional[ResultCallback] = None,
     progress_state: Optional[Dict[str, int]] = None,
+    final_results: Optional[List] = None,
     *args,
     **kwargs,
 ) -> List[Any]:
@@ -80,8 +85,8 @@ async def process_batches_concurrently(
     :param operation_func: Function to call for each batch
     :param max_concurrent_batches: Maximum number of concurrent batch operations
     :param total_records: Total number of records being processed
-    :param on_batch_complete: Optional callback invoked after each batch completes
-    :param progress_state: Dict with progress state (updated by caller)
+    :param on_result: Optional callback invoked after each batch completes with results
+    :param progress_state: Dict with progress state (to include in callback)
     :param args: Additional positional arguments for operation_func
     :param kwargs: Additional keyword arguments for operation_func
     :returns: List of results from all batches in the same order as input
@@ -91,7 +96,7 @@ async def process_batches_concurrently(
         raise ValueError("max_concurrent_batches must be greater than 0")
 
     semaphore = asyncio.Semaphore(max_concurrent_batches)
-    callback_lock = asyncio.Lock() if on_batch_complete else None
+    callback_lock = asyncio.Lock() if on_result else None
 
     async def process_batch_with_semaphore(batch_index: int, batch):
         async with semaphore:
@@ -104,20 +109,52 @@ async def process_batches_concurrently(
                 )
                 result = [e for _ in range(len(batch))]
 
-            # Invoke progress callback if provided
-            if on_batch_complete and callback_lock and progress_state:
+            # Invoke callback if provided, with results and progress state
+            if on_result and callback_lock and progress_state:
                 async with callback_lock:
-                    progress_info: ProgressInfo = {
+                    # Split results into successes and errors
+                    successes: List[CollectionResult] = []
+                    errors: List[CollectionResult] = []
+
+                    for item in result:
+                        # Convert exceptions to CollectionResult format
+                        if isinstance(item, Exception):
+                            error_result = convert_exception_to_result(item)
+                            errors.append(error_result)
+                        elif item.get("success", False):
+                            successes.append(item)
+                        else:
+                            errors.append(item)
+
+                    # Compute current counts dynamically from final_results
+                    if final_results:
+                        records_succeeded = sum(
+                            1
+                            for r in final_results
+                            if r is not None and r.get("success", False)
+                        )
+                        records_failed = sum(
+                            1
+                            for r in final_results
+                            if r is not None and not r.get("success", False)
+                        )
+                        records_completed = records_succeeded + records_failed
+                    else:
+                        records_succeeded = records_failed = records_completed = 0
+
+                    result_info: ResultInfo = {
+                        "successes": successes,
+                        "errors": errors,
                         "total_records": progress_state["total_records"],
-                        "records_completed": progress_state["records_completed"],
-                        "records_succeeded": progress_state["records_succeeded"],
-                        "records_failed": progress_state["records_failed"],
+                        "records_completed": records_completed,
+                        "records_succeeded": records_succeeded,
+                        "records_failed": records_failed,
                         "records_pending": progress_state["records_pending"],
                         "current_attempt": progress_state["current_attempt"],
                         "current_batch_size": progress_state["current_batch_size"],
                         "current_concurrency": progress_state["current_concurrency"],
                     }
-                    await on_batch_complete(progress_info)
+                    await on_result(result_info)
 
             return result
 
@@ -141,7 +178,7 @@ async def process_with_retries(
     max_attempts: int,
     should_retry_callback: Optional[ShouldRetryCallback],
     max_concurrent_batches: Union[int, List[int]],
-    on_batch_complete: Optional[ProgressCallback],
+    on_result: Optional[ResultCallback],
     max_limit: int,
     *args,
     **kwargs,
@@ -155,7 +192,7 @@ async def process_with_retries(
     :param max_attempts: Maximum number of attempts per record
     :param should_retry_callback: Optional callback to determine if record should be retried
     :param max_concurrent_batches: Maximum concurrent batches (int or list of ints per attempt)
-    :param on_batch_complete: Progress callback
+    :param on_result: Callback invoked after each batch completes with results and progress
     :param max_limit: Maximum batch size limit for the operation
     :param args: Additional args for operation_func
     :param kwargs: Additional kwargs for operation_func
@@ -203,14 +240,15 @@ async def process_with_retries(
         records_to_process = [r.record for r in current_records]
         batches = split_into_batches(records_to_process, current_batch_size, max_limit)
 
-        # Process batches with current concurrency level (no callback here)
+        # Process batches - callback will be invoked for each batch with results
         batch_results = await process_batches_concurrently(
             batches,
             operation_func,
             current_concurrency,
             len(records_to_process),
-            None,  # Don't invoke callback during batch processing
-            None,
+            on_result,
+            progress_state,
+            final_results,
             *args,
             **kwargs,
         )
@@ -224,11 +262,7 @@ async def process_with_retries(
             final_results,
         )
 
-        # Update progress state based on results
-        # Count completed records (those not being retried)
-        records_completed_this_round = len(current_records) - len(records_to_retry)
-
-        # Count successes and failures in final_results so far
+        # Update progress state based on results for next iteration
         records_succeeded = sum(
             1 for r in final_results if r is not None and r.get("success", False)
         )
@@ -240,20 +274,6 @@ async def process_with_retries(
         progress_state["records_succeeded"] = records_succeeded
         progress_state["records_failed"] = records_failed
         progress_state["records_pending"] = len(records_to_retry)
-
-        # Invoke progress callback after we know the results
-        if on_batch_complete:
-            progress_info: ProgressInfo = {
-                "total_records": progress_state["total_records"],
-                "records_completed": progress_state["records_completed"],
-                "records_succeeded": progress_state["records_succeeded"],
-                "records_failed": progress_state["records_failed"],
-                "records_pending": progress_state["records_pending"],
-                "current_attempt": progress_state["current_attempt"],
-                "current_batch_size": progress_state["current_batch_size"],
-                "current_concurrency": progress_state["current_concurrency"],
-            }
-            await on_batch_complete(progress_info)
 
         if records_to_retry:
             logger.info(

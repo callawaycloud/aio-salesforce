@@ -103,15 +103,19 @@ async with SalesforceClient(auth_strategy=auth) as sf:
 
 **Advanced - With Retries, Concurrency Scaling, and Progress:**
 ```python
-from aio_sf.api.collections import ProgressInfo
+from aio_sf.api.collections import ResultInfo
 
-async def on_progress(info: ProgressInfo):
+async def on_result(info: ResultInfo):
+    # Called after each batch completes with successes and errors split
     print(
-        f"Attempt {info['current_attempt']}: "
-        f"{info['records_succeeded']} succeeded, "
-        f"{info['records_failed']} failed, "
+        f"Batch: {len(info['successes'])} succeeded, {len(info['errors'])} failed | "
+        f"Attempt {info['current_attempt']}, "
+        f"Overall: {info['records_succeeded']} OK, {info['records_failed']} failed, "
         f"{info['records_pending']} pending"
     )
+    # Inspect errors (includes both API errors and HTTP failures)
+    for error in info['errors']:
+        print(f"  Error: {error['errors']}")
 
 async with SalesforceClient(auth_strategy=auth) as sf:
     results = await sf.collections.insert(
@@ -120,7 +124,7 @@ async with SalesforceClient(auth_strategy=auth) as sf:
         batch_size=[200, 100, 25],         # Shrink batch size on retry
         max_concurrent_batches=[5, 3, 1],  # Reduce concurrency on retry
         max_attempts=5,                    # Retry up to 5 times
-        on_batch_complete=on_progress,     # Progress callback
+        on_result=on_result,               # Callback with results
     )
 ```
 

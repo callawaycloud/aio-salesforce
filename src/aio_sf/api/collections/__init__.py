@@ -1,7 +1,7 @@
 """Salesforce Collections API module."""
 
 from .client import CollectionsAPI
-from .batch import ProgressInfo, ProgressCallback
+from .batch import ResultInfo, ResultCallback
 from .retry import ShouldRetryCallback, default_should_retry
 from .types import (
     CollectionError,
@@ -14,8 +14,8 @@ from .types import (
 
 __all__ = [
     "CollectionsAPI",
-    "ProgressInfo",
-    "ProgressCallback",
+    "ResultInfo",
+    "ResultCallback",
     "ShouldRetryCallback",
     "default_should_retry",
     "CollectionError",

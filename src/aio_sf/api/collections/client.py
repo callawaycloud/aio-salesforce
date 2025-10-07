@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..client import SalesforceClient
 
-from .batch import ProgressCallback, process_with_retries
+from .batch import ResultCallback, process_with_retries
 from .records import (
     detect_record_type_and_sobject,
     prepare_records,
@@ -92,7 +92,7 @@ class CollectionsAPI:
         batch_size: Union[int, List[int]] = 200,
         max_concurrent_batches: Union[int, List[int]] = 5,
         api_version: Optional[str] = None,
-        on_batch_complete: Optional[ProgressCallback] = None,
+        on_result: Optional[ResultCallback] = None,
         max_attempts: int = 1,
         should_retry: Optional[ShouldRetryCallback] = None,
     ) -> CollectionInsertResponse:
@@ -109,7 +109,7 @@ class CollectionsAPI:
         :param batch_size: Batch size (int for same size, or list of ints per attempt). Max 200.
         :param max_concurrent_batches: Maximum number of concurrent batch operations
         :param api_version: API version to use
-        :param on_batch_complete: Optional async callback invoked after each batch completes
+        :param on_result: Optional async callback invoked after each batch completes with results
         :param max_attempts: Maximum number of attempts per record (default: 1, no retries)
         :param should_retry: Optional callback to determine if a failed record should be retried
         :returns: List of results for each record, in same order as input
@@ -139,7 +139,7 @@ class CollectionsAPI:
             max_attempts,
             should_retry,
             max_concurrent_batches,
-            on_batch_complete,
+            on_result,
             self.MAX_RECORDS_INSERT,
             actual_sobject_type,
             all_or_none,
@@ -200,7 +200,7 @@ class CollectionsAPI:
         batch_size: Union[int, List[int]] = 200,
         max_concurrent_batches: Union[int, List[int]] = 5,
         api_version: Optional[str] = None,
-        on_batch_complete: Optional[ProgressCallback] = None,
+        on_result: Optional[ResultCallback] = None,
         max_attempts: int = 1,
         should_retry: Optional[ShouldRetryCallback] = None,
     ) -> CollectionUpdateResponse:
@@ -217,7 +217,7 @@ class CollectionsAPI:
         :param batch_size: Batch size (int for same size, or list of ints per attempt). Max 200.
         :param max_concurrent_batches: Maximum number of concurrent batch operations
         :param api_version: API version to use
-        :param on_batch_complete: Optional async callback invoked after each batch completes
+        :param on_result: Optional async callback invoked after each batch completes with results
         :param max_attempts: Maximum number of attempts per record (default: 1, no retries)
         :param should_retry: Optional callback to determine if a failed record should be retried
         :returns: List of results for each record, in same order as input
@@ -247,7 +247,7 @@ class CollectionsAPI:
             max_attempts,
             should_retry,
             max_concurrent_batches,
-            on_batch_complete,
+            on_result,
             self.MAX_RECORDS_UPDATE,
             actual_sobject_type,
             all_or_none,
@@ -313,7 +313,7 @@ class CollectionsAPI:
         batch_size: Union[int, List[int]] = 200,
         max_concurrent_batches: Union[int, List[int]] = 5,
         api_version: Optional[str] = None,
-        on_batch_complete: Optional[ProgressCallback] = None,
+        on_result: Optional[ResultCallback] = None,
         max_attempts: int = 1,
         should_retry: Optional[ShouldRetryCallback] = None,
     ) -> CollectionUpsertResponse:
@@ -331,7 +331,7 @@ class CollectionsAPI:
         :param batch_size: Batch size (int for same size, or list of ints per attempt). Max 200.
         :param max_concurrent_batches: Maximum number of concurrent batch operations
         :param api_version: API version to use
-        :param on_batch_complete: Optional async callback invoked after each batch completes
+        :param on_result: Optional async callback invoked after each batch completes with results
         :param max_attempts: Maximum number of attempts per record (default: 1, no retries)
         :param should_retry: Optional callback to determine if a failed record should be retried
         :returns: List of results for each record, in same order as input
@@ -361,7 +361,7 @@ class CollectionsAPI:
             max_attempts,
             should_retry,
             max_concurrent_batches,
-            on_batch_complete,
+            on_result,
             self.MAX_RECORDS_UPSERT,
             external_id_field,
             actual_sobject_type,
@@ -411,7 +411,7 @@ class CollectionsAPI:
         batch_size: Union[int, List[int]] = 200,
         max_concurrent_batches: Union[int, List[int]] = 5,
         api_version: Optional[str] = None,
-        on_batch_complete: Optional[ProgressCallback] = None,
+        on_result: Optional[ResultCallback] = None,
         max_attempts: int = 1,
         should_retry: Optional[ShouldRetryCallback] = None,
     ) -> CollectionDeleteResponse:
@@ -427,7 +427,7 @@ class CollectionsAPI:
         :param batch_size: Batch size (int for same size, or list of ints per attempt). Max 200.
         :param max_concurrent_batches: Maximum number of concurrent batch operations
         :param api_version: API version to use
-        :param on_batch_complete: Optional async callback invoked after each batch completes
+        :param on_result: Optional async callback invoked after each batch completes with results
         :param max_attempts: Maximum number of attempts per record (default: 1, no retries)
         :param should_retry: Optional callback to determine if a failed record should be retried
         :returns: List of results for each record, in same order as input
@@ -453,7 +453,7 @@ class CollectionsAPI:
             max_attempts,
             should_retry,
             max_concurrent_batches,
-            on_batch_complete,
+            on_result,
             self.MAX_RECORDS_DELETE,
             all_or_none,
             api_version,
