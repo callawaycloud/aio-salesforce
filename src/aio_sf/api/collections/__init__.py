@@ -1,15 +1,11 @@
 """Salesforce Collections API module."""
 
 from .client import CollectionsAPI
+from .batch import ProgressInfo, ProgressCallback
+from .retry import ShouldRetryCallback, default_should_retry
 from .types import (
     CollectionError,
-    CollectionRequest,
     CollectionResult,
-    CollectionResponse,
-    InsertCollectionRequest,
-    UpdateCollectionRequest,
-    UpsertCollectionRequest,
-    DeleteCollectionRequest,
     CollectionInsertResponse,
     CollectionUpdateResponse,
     CollectionUpsertResponse,
@@ -18,14 +14,12 @@ from .types import (
 
 __all__ = [
     "CollectionsAPI",
+    "ProgressInfo",
+    "ProgressCallback",
+    "ShouldRetryCallback",
+    "default_should_retry",
     "CollectionError",
-    "CollectionRequest",
     "CollectionResult",
-    "CollectionResponse",
-    "InsertCollectionRequest",
-    "UpdateCollectionRequest",
-    "UpsertCollectionRequest",
-    "DeleteCollectionRequest",
     "CollectionInsertResponse",
     "CollectionUpdateResponse",
     "CollectionUpsertResponse",

@@ -88,7 +88,26 @@ async def main():
 asyncio.run(main())
 ```
 
+### Collections API - Batch Operations
 
+Efficiently handle bulk operations with automatic batching and concurrency:
+
+```python
+async with SalesforceClient(auth_strategy=auth) as sf:
+    records = [{"Name": f"Account {i}"} for i in range(1000)]
+    
+    # Insert with automatic batching and parallel processing
+    results = await sf.collections.insert(
+        records, sobject_type="Account", 
+        batch_size=200, max_concurrent_batches=5
+    )
+    
+    # Also: update(), upsert(), delete()
+```
+
+**Features:** Automatic batching • Concurrent processing • Order preservation • Smart retries • Progress tracking
+
+See [RETRY_GUIDE.md](RETRY_GUIDE.md) for advanced retry strategies, progress tracking, and custom error handling.
 
 ## Exporter
 
