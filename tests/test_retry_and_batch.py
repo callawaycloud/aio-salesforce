@@ -476,13 +476,18 @@ class TestProgressTracking:
         )
 
         assert len(results) == 300
-        # Should have 2 progress callbacks (one per batch)
-        assert len(progress_calls) == 2
+        # With the new design, callback is invoked once per attempt (after all batches)
+        # Since all records succeed on first attempt, we get 1 callback
+        assert len(progress_calls) == 1
 
-        # Verify progress data
-        assert progress_calls[0]["total_batches"] == 2
+        # Verify progress data - after attempt completes, all succeeded
         assert progress_calls[0]["total_records"] == 300
-        assert progress_calls[0]["retry_count"] == 0
+        assert progress_calls[0]["current_batch_size"] == 200
+        assert progress_calls[0]["current_concurrency"] == 5  # default
+        assert progress_calls[0]["current_attempt"] == 1
+        assert progress_calls[0]["records_succeeded"] == 300
+        assert progress_calls[0]["records_failed"] == 0
+        assert progress_calls[0]["records_pending"] == 0
 
     @pytest.mark.asyncio
     async def test_progress_with_retries(self, client):
@@ -530,10 +535,18 @@ class TestProgressTracking:
 
         # Should have 2 progress callbacks (initial + retry)
         assert len(progress_calls) == 2
-        # First has no retries
-        assert progress_calls[0]["retry_count"] == 0
-        # Second shows retries
-        assert progress_calls[1]["retry_count"] == 10
+
+        # First attempt: all failed, all pending retry
+        assert progress_calls[0]["current_attempt"] == 1
+        assert progress_calls[0]["records_succeeded"] == 0
+        assert progress_calls[0]["records_failed"] == 0
+        assert progress_calls[0]["records_pending"] == 10
+
+        # Second attempt: all succeeded
+        assert progress_calls[1]["current_attempt"] == 2
+        assert progress_calls[1]["records_succeeded"] == 10
+        assert progress_calls[1]["records_failed"] == 0
+        assert progress_calls[1]["records_pending"] == 0
 
 
 class TestConcurrencyScaling:
@@ -646,7 +659,7 @@ class TestHTTPErrorHandling:
     async def test_default_retries_transient_http_errors(self, client):
         """Test that default behavior retries transient HTTP errors."""
         import httpx
-        
+
         collections_api = CollectionsAPI(client)
 
         records = [{"Name": "Account 1"}]
@@ -681,7 +694,7 @@ class TestHTTPErrorHandling:
     async def test_default_does_not_retry_4xx_errors(self, client):
         """Test that default behavior does NOT retry 4xx client errors."""
         import httpx
-        
+
         collections_api = CollectionsAPI(client)
 
         records = [{"Name": "Account 1"}]
@@ -716,7 +729,7 @@ class TestHTTPErrorHandling:
     async def test_http_error_converts_to_retryable_failure(self, client):
         """Test that transient HTTP errors are retried and converted to results."""
         import httpx
-        
+
         collections_api = CollectionsAPI(client)
 
         records = [{"Name": "Account 1"}, {"Name": "Account 2"}]

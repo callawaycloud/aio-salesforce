@@ -90,24 +90,40 @@ asyncio.run(main())
 
 ### Collections API - Batch Operations
 
-Efficiently handle bulk operations with automatic batching and concurrency:
+Bulk operations (insert, update, upsert, delete) with automatic batching and concurrency.
 
+**Basic Usage:**
 ```python
 async with SalesforceClient(auth_strategy=auth) as sf:
     records = [{"Name": f"Account {i}"} for i in range(1000)]
     
-    # Insert with automatic batching and parallel processing
-    results = await sf.collections.insert(
-        records, sobject_type="Account", 
-        batch_size=200, max_concurrent_batches=5
-    )
-    
+    results = await sf.collections.insert(records, sobject_type="Account")
     # Also: update(), upsert(), delete()
 ```
 
-**Features:** Automatic batching • Concurrent processing • Order preservation • Smart retries • Progress tracking
+**Advanced - With Retries, Concurrency Scaling, and Progress:**
+```python
+from aio_sf.api.collections import ProgressInfo
 
-See [RETRY_GUIDE.md](RETRY_GUIDE.md) for advanced retry strategies, progress tracking, and custom error handling.
+async def on_progress(info: ProgressInfo):
+    print(
+        f"Attempt {info['current_attempt']}: "
+        f"{info['records_succeeded']} succeeded, "
+        f"{info['records_failed']} failed, "
+        f"{info['records_pending']} pending"
+    )
+
+async with SalesforceClient(auth_strategy=auth) as sf:
+    results = await sf.collections.insert(
+        records=records,
+        sobject_type="Account",
+        batch_size=[200, 100, 25],         # Shrink batch size on retry
+        max_concurrent_batches=[5, 3, 1],  # Reduce concurrency on retry
+        max_attempts=5,                    # Retry up to 5 times
+        on_batch_complete=on_progress,     # Progress callback
+    )
+```
+
 
 ## Exporter
 
