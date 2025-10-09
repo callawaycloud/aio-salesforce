@@ -126,29 +126,24 @@ async def process_batches_concurrently(
                         else:
                             errors.append(item)
 
-                    # Compute current counts dynamically from final_results
-                    if final_results:
-                        records_succeeded = sum(
-                            1
-                            for r in final_results
-                            if r is not None and r.get("success", False)
-                        )
-                        records_failed = sum(
-                            1
-                            for r in final_results
-                            if r is not None and not r.get("success", False)
-                        )
-                        records_completed = records_succeeded + records_failed
-                    else:
-                        records_succeeded = records_failed = records_completed = 0
+                    # Update progress_state cumulatively for per-batch reporting
+                    # We only count successes as completed here (errors remain pending until final)
+                    progress_state["records_succeeded"] += len(successes)
+                    progress_state["records_completed"] += len(successes)
+                    progress_state["records_pending"] = progress_state[
+                        "total_records"
+                    ] - (
+                        progress_state["records_succeeded"]
+                        + progress_state["records_failed"]
+                    )
 
                     result_info: ResultInfo = {
                         "successes": successes,
                         "errors": errors,
                         "total_records": progress_state["total_records"],
-                        "records_completed": records_completed,
-                        "records_succeeded": records_succeeded,
-                        "records_failed": records_failed,
+                        "records_completed": progress_state["records_completed"],
+                        "records_succeeded": progress_state["records_succeeded"],
+                        "records_failed": progress_state["records_failed"],
                         "records_pending": progress_state["records_pending"],
                         "current_attempt": progress_state["current_attempt"],
                         "current_batch_size": progress_state["current_batch_size"],
