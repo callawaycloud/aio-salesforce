@@ -227,17 +227,11 @@ class ParquetWriter:
 
             # Apply type-specific conversions
             if pa.types.is_boolean(field.type):
-                # Convert string 'true'/'false' to boolean, keeping original values for others
-                original_series = df[field_name]
-                mapped_series = original_series.map(
-                    {"true": True, "false": False, None: None}
+                # Convert string 'true'/'false' to boolean
+                # Use map directly - unmapped values become NaN which is fine for nullable boolean
+                df[field_name] = df[field_name].map(
+                    {"true": True, "false": False, "True": True, "False": False}
                 )
-                # For values that weren't mapped, keep the original values
-                # This avoids the fillna FutureWarning by using boolean indexing instead
-                mask = mapped_series.notna()
-                result_series = original_series.copy()
-                result_series.loc[mask] = mapped_series.loc[mask]
-                df[field_name] = result_series
             elif pa.types.is_integer(field.type):
                 df[field_name] = pd.to_numeric(df[field_name], errors="coerce").astype(
                     "Int64"
@@ -256,6 +250,12 @@ class ParquetWriter:
                 date_series = df[field_name]
                 if isinstance(date_series, pd.Series):
                     df[field_name] = self._convert_date_strings_to_dates(date_series)
+            elif pa.types.is_string(field.type):
+                # Ensure string columns contain only strings or None
+                # This handles edge cases where non-string values might be present
+                df[field_name] = df[field_name].apply(
+                    lambda x: None if pd.isna(x) else str(x)
+                )
 
             # Replace empty strings with None for non-string fields
             if not pa.types.is_string(field.type):
@@ -300,33 +300,19 @@ class ParquetWriter:
 
     def _convert_date_strings_to_dates(self, series: pd.Series) -> pd.Series:
         """
-        Convert Salesforce ISO date strings to pandas date objects.
+        Convert Salesforce ISO date strings to pandas datetime objects.
 
         Salesforce returns date in ISO format like '2025-10-01'.
+        PyArrow will handle conversion from datetime64 to date32.
         """
+        # Replace empty strings with None first
+        series = series.replace({"": None})
 
-        def parse_sf_date(date_str):
-            if pd.isna(date_str) or date_str == "" or date_str is None:
-                return pd.NaT
+        # Use pandas to_datetime for vectorized conversion
+        # This returns datetime64[ns] which PyArrow can convert to date32
+        result = pd.to_datetime(series, format="%Y-%m-%d", errors="coerce")
 
-            try:
-                # Handle Salesforce date format (YYYY-MM-DD)
-                date_str = str(date_str).strip()
-
-                # Use pandas to_datetime for date parsing, then convert to date
-                return pd.to_datetime(date_str, format="%Y-%m-%d").date()
-
-            except (ValueError, TypeError) as e:
-                logging.warning(f"Failed to parse date string '{date_str}': {e}")
-                return pd.NaT
-
-        # Apply the conversion function to the series
-        result = series.apply(parse_sf_date)
-        if isinstance(result, pd.Series):
-            return result
-        else:
-            # This shouldn't happen, but handle it gracefully
-            return pd.Series(result, index=series.index)
+        return result
 
     def close(self) -> None:
         """Close the parquet writer."""
