@@ -19,6 +19,10 @@ from .parquet_writer import (
     write_query_to_parquet,
     salesforce_to_arrow_type,
 )
+from .arrow import (
+    records_to_arrow_batch,
+    query_result_to_batches,
+)
 
 __all__ = [
     "bulk_query",
@@ -31,4 +35,6 @@ __all__ = [
     "create_schema_from_metadata",
     "write_query_to_parquet",
     "salesforce_to_arrow_type",
+    "records_to_arrow_batch",
+    "query_result_to_batches",
 ]

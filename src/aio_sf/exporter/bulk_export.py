@@ -4,6 +4,8 @@ import csv
 import asyncio
 import io
 
+import httpx
+
 from ..api.describe.types import FieldInfo
 from ..api.client import SalesforceClient
 
@@ -22,6 +24,8 @@ class QueryResult:
         query_locator: Optional[str] = None,
         batch_size: int = 10000,
         api_version: Optional[str] = None,
+        max_retries: int = 3,
+        retry_base_delay: float = 10,
     ):
         """
         Initialize QueryResult.
@@ -32,6 +36,8 @@ class QueryResult:
         :param query_locator: Starting locator (None to start from beginning)
         :param batch_size: Number of records to fetch per batch
         :param api_version: Salesforce API version (defaults to client version)
+        :param max_retries: Number of retry attempts on transient network errors
+        :param retry_base_delay: Base delay in seconds for exponential backoff between retries
         """
         self._sf = sf
         self._job_id = job_id
@@ -39,6 +45,8 @@ class QueryResult:
         self._query_locator = query_locator
         self._batch_size = batch_size
         self._api_version = api_version or sf.version
+        self._max_retries = max_retries
+        self._retry_base_delay = retry_base_delay
 
     def __iter__(self):
         """Synchronous iterator - collects all records in memory."""
@@ -100,10 +108,12 @@ class QueryResult:
         return QueryResult(
             sf=self._sf,
             job_id=self._job_id,
-            total_records=None,  # Unknown when resuming
+            total_records=None,
             query_locator=locator,
             batch_size=self._batch_size,
             api_version=self._api_version,
+            max_retries=self._max_retries,
+            retry_base_delay=self._retry_base_delay,
         )
 
     def _stream_csv_to_records(
@@ -163,20 +173,33 @@ class QueryResult:
 
         try:
             while True:
-
-                # Use the bulk_v2 API to get results
-                response_text, next_locator = await self._sf.bulk_v2.get_job_results(
-                    job_id=self._job_id,
-                    locator=locator,
-                    max_records=self._batch_size,
-                    api_version=self._api_version,
-                )
+                response_text: str = ""
+                next_locator: Optional[str] = None
+                for attempt in range(self._max_retries):
+                    try:
+                        response_text, next_locator = await self._sf.bulk_v2.get_job_results(
+                            job_id=self._job_id,
+                            locator=locator,
+                            max_records=self._batch_size,
+                            api_version=self._api_version,
+                        )
+                        break
+                    except (httpx.TimeoutException, httpx.ConnectError) as e:
+                        if attempt < self._max_retries - 1:
+                            delay = self._retry_base_delay * (2 ** attempt)
+                            logging.warning(
+                                f"Transient error fetching results at record {ctn} "
+                                f"(attempt {attempt + 1}/{self._max_retries}): {e}. "
+                                f"Retrying in {delay}s..."
+                            )
+                            await asyncio.sleep(delay)
+                        else:
+                            raise
 
                 for record in self._stream_csv_to_records(response_text):
                     ctn += 1
                     yield record
 
-                # setup next locator
                 locator = next_locator
 
                 if not locator:
