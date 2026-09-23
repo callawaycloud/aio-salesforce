@@ -147,6 +147,67 @@ class TestSfdxCliAuth:
             assert token == "sfdx_token_123"
             assert auth.access_token == "sfdx_token_123"
             assert auth.instance_url == "https://test.my.salesforce.com"
+            assert mock_subprocess.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_redacted_token_falls_back_to_show_access_token(self):
+        """Newer CLIs redact the token in 'sf org display'; fetch it separately."""
+        auth = SfdxCliAuth("test-org-alias")
+
+        display_stdout = """
+        {
+            "status": 0,
+            "result": {
+                "accessToken": "[REDACTED] Use 'sf org auth show-access-token' to view",
+                "instanceUrl": "https://test.my.salesforce.com/"
+            }
+        }
+        """
+        token_stdout = '{"status": 0, "result": {"accessToken": "sfdx_token_456"}}'
+
+        def make_process(stdout: str):
+            process = AsyncMock()
+            process.returncode = 0
+            process.communicate.return_value = (stdout.encode(), b"")
+            return process
+
+        with patch("asyncio.create_subprocess_shell") as mock_subprocess:
+            mock_subprocess.side_effect = [
+                make_process(display_stdout),
+                make_process(token_stdout),
+            ]
+
+            token = await auth.authenticate(AsyncMock())
+
+            assert token == "sfdx_token_456"
+            assert auth.instance_url == "https://test.my.salesforce.com"
+            assert "show-access-token" in mock_subprocess.call_args_list[1].args[0]
+
+    @pytest.mark.asyncio
+    async def test_redacted_token_without_fallback_token_fails(self):
+        """Raise instead of sending a redaction placeholder as the session id."""
+        auth = SfdxCliAuth("test-org-alias")
+
+        display_stdout = (
+            '{"status": 0, "result": {"accessToken": "[REDACTED]", '
+            '"instanceUrl": "https://test.my.salesforce.com"}}'
+        )
+        token_stdout = '{"status": 0, "result": {}}'
+
+        def make_process(stdout: str):
+            process = AsyncMock()
+            process.returncode = 0
+            process.communicate.return_value = (stdout.encode(), b"")
+            return process
+
+        with patch("asyncio.create_subprocess_shell") as mock_subprocess:
+            mock_subprocess.side_effect = [
+                make_process(display_stdout),
+                make_process(token_stdout),
+            ]
+
+            with pytest.raises(SalesforceAuthError, match="usable 'accessToken'"):
+                await auth.authenticate(AsyncMock())
 
     @pytest.mark.asyncio
     async def test_failed_sfdx_command(self):

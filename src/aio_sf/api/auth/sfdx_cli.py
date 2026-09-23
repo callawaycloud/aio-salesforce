@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class SfdxCliAuth(AuthStrategy):
-    """SFDX CLI authentication strategy using 'sf org display' command."""
+    """SFDX CLI authentication strategy using 'sf org display' / 'sf org auth show-access-token'."""
 
     def __init__(self, username_or_alias: str):
         """
@@ -65,48 +65,34 @@ class SfdxCliAuth(AuthStrategy):
 
     async def _execute_sfdx_command(self) -> Dict[str, Any]:
         """
-        Execute the SFDX CLI command asynchronously and parse the result.
+        Execute the SFDX CLI commands asynchronously and parse the result.
+
+        ``sf org display`` provides the instance URL (and refreshes the session).
+        Newer CLI versions redact the access token in that output, in which case
+        it is fetched with ``sf org auth show-access-token``.
 
         :returns: Dictionary containing accessToken and instanceUrl
         :raises: SalesforceAuthError if command fails or output is invalid
         """
-        cmd = f"sf org display -o {self.username_or_alias} --json"
-
         try:
-            # Run the command asynchronously
-            process = await asyncio.create_subprocess_shell(
-                cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            result = await self._run_sf_json(
+                f"sf org display -o {self.username_or_alias} --json"
             )
-
-            stdout, stderr = await process.communicate()
-
-            if process.returncode != 0:
-                error_msg = stderr.decode().strip() if stderr else "Unknown error"
-                raise SalesforceAuthError(f"SFDX command failed: {error_msg}")
-
-            # Clean ANSI escape sequences from output
-            cleaned_output = self._ansi_escape.sub("", stdout.decode())
-
-            # Parse JSON response
-            try:
-                sfdx_info = json.loads(cleaned_output)
-            except json.JSONDecodeError as e:
-                raise SalesforceAuthError(f"Invalid JSON response from SFDX CLI: {e}")
-
-            # Validate response structure
-            if "result" not in sfdx_info:
-                raise SalesforceAuthError("SFDX CLI response missing 'result' field")
-
-            result = sfdx_info["result"]
-
-            if "accessToken" not in result:
-                raise SalesforceAuthError(
-                    "SFDX CLI response missing 'accessToken' field"
-                )
 
             if "instanceUrl" not in result:
                 raise SalesforceAuthError(
                     "SFDX CLI response missing 'instanceUrl' field"
+                )
+
+            if _is_redacted(result.get("accessToken")):
+                token_result = await self._run_sf_json(
+                    f"sf org auth show-access-token -o {self.username_or_alias} --json"
+                )
+                result["accessToken"] = token_result.get("accessToken")
+
+            if _is_redacted(result.get("accessToken")):
+                raise SalesforceAuthError(
+                    "SFDX CLI did not return a usable 'accessToken'"
                 )
 
             return result
@@ -117,3 +103,33 @@ class SfdxCliAuth(AuthStrategy):
             raise SalesforceAuthError(
                 "SFDX CLI not found. Please ensure Salesforce CLI is installed and in PATH"
             )
+
+    async def _run_sf_json(self, cmd: str) -> Dict[str, Any]:
+        """Run an ``sf ... --json`` command and return its ``result`` object."""
+        process = await asyncio.create_subprocess_shell(
+            cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+
+        stdout, stderr = await process.communicate()
+
+        if process.returncode != 0:
+            error_msg = stderr.decode().strip() if stderr else "Unknown error"
+            raise SalesforceAuthError(f"SFDX command failed: {error_msg}")
+
+        # Clean ANSI escape sequences from output
+        cleaned_output = self._ansi_escape.sub("", stdout.decode())
+
+        try:
+            sfdx_info = json.loads(cleaned_output)
+        except json.JSONDecodeError as e:
+            raise SalesforceAuthError(f"Invalid JSON response from SFDX CLI: {e}")
+
+        if "result" not in sfdx_info:
+            raise SalesforceAuthError("SFDX CLI response missing 'result' field")
+
+        return sfdx_info["result"]
+
+
+def _is_redacted(token: Any) -> bool:
+    """True when the CLI returned no token or a redaction placeholder."""
+    return not token or "REDACTED" in str(token)
